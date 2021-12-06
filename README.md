@@ -42,7 +42,7 @@ Para instalar la placa ESP32 en Arduino IDE
 El diseño del circuito esquemático puede realizarse con algún CAD como Altium, KiCad, etc. También puede utilizarse la herramienta de software Fritzing para montar rápidamente un esquema de conexionado.
 ### PCB:
 El diseño del PCB puede realizarse con algún CAD como Altium, KiCad, etc.
-### Gabinete
+## Gabinete
 Podrá ser realizado con software Fusion 360 y luego impreso en 3D con filamentos PLA o ABS. Puede llevar una inscripción personalizada en cualquiera de sus caras. Para generar el código de máquina (g-Code) que deben interpretar las impresoras 3D, puede utilizarse el software Slicer o el Cura u otro.
 
 ## Trabajo en repositorio
