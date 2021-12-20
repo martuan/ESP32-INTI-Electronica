@@ -130,15 +130,15 @@ int contadorProceso1 = 0;
 int contadorProceso2 = 0;
 int flagCambioModoLocal = 0;
 int cantFallos = 0;
-int tiempoEntreLecturas = 10;
-int cantLecturas = 20;
+//int tiempoEntreLecturas = 10;
+//int cantLecturas = 20;
 int flagModoDebug = 0;
-int tiempoMinutoSinReset = 0;
-int tiempoHoraSinReset = 0;
-int tiempoDiaSinReset = 0;
-int cantSensoresIR = 1;
-int flagLecturaEmisividad = 1;
-int flagLecturasErroneas = 0;
+//int tiempoMinutoSinReset = 0;
+//int tiempoHoraSinReset = 0;
+//int tiempoDiaSinReset = 0;
+//int cantSensoresIR = 1;
+//int flagLecturaEmisividad = 1;
+//int flagLecturasErroneas = 0;
 float arrayUltimasLecturas[100] = {};
 int idx2 = 0;
 int flagUltimasLecturas = 0;
@@ -148,10 +148,10 @@ int Red = 0;
 int Green = 0;
 int Blue = 0;
 int neopixelFueApagado = 0;
-char tiempoSinReset[50] = {};
+//char tiempoSinReset[50] = {};
 char msgKeepAlive[150] = {};
-int flagCorreccion = 1;//0;
-int flagScan = 0;
+//int flagCorreccion = 1;//0;
+//int flagScan = 0;
 int flagModoRed = 0;
 int timeLED = 1000;
 String strEEPROM = "";
@@ -166,8 +166,8 @@ String savedSSID = {};
 String savedPASS = {};
 String ssid = {};
 String password = {};
-char flagVieneDelReset = 0;
-char flagModoAPforzado = 0;
+//char flagVieneDelReset = 0;
+//char flagModoAPforzado = 0;
 char flagOTA = 0;
 String ssidOTA = {};
 String passwordOTA = {};
@@ -1095,8 +1095,8 @@ void publicarKeepAlive(void){
   strcpy(msgKeepAlive, "");//borra el contenido del string
   strcat(msgKeepAlive, "...Estoy vivo. ");
   strcat(msgKeepAlive, handtempKeepAlive_topic_publish);
-  strcat(msgKeepAlive, " ");
-  strcat(msgKeepAlive, tiempoSinReset);
+  //strcat(msgKeepAlive, " ");
+  //strcat(msgKeepAlive, tiempoSinReset);
 
   client1.publish(handtempKeepAlive_topic_publish, msgKeepAlive);
   Serial.println(handtempKeepAlive_topic_publish);
@@ -1205,9 +1205,11 @@ void switchCaseParametros(char charParamID, String valorParam){
 
     break;
     case 'T':
-      tiempoEntreLecturas = valorParam.toInt();
+      /*
+	  tiempoEntreLecturas = valorParam.toInt();
       Serial.print("TiempoEntreLecturas: ");
       Serial.println(tiempoEntreLecturas);
+	  */
     break;
     case 'm':
 	/*
@@ -1317,9 +1319,11 @@ void switchCaseParametros(char charParamID, String valorParam){
 
     break;
     case 'C':
+	/*
       cantLecturas = valorParam.toInt();
       Serial.print("cantLecturas: ");
       Serial.println(cantLecturas);
+	  */
     break;
     case 'd':
       modoDebug = valorParam.toInt();//1 para activarlo; 0 para desactivarlo
@@ -1333,6 +1337,7 @@ void switchCaseParametros(char charParamID, String valorParam){
       
     break;
     case 'S':
+	/*
       cantSensoresIR = valorParam.toInt();
 
       if(cantSensoresIR < 1 && cantSensoresIR > 3){//valida la cantidad declarada
@@ -1343,7 +1348,7 @@ void switchCaseParametros(char charParamID, String valorParam){
       Serial.print("cantSensoresIR: ");
       Serial.println(cantSensoresIR);
       flagLecturaEmisividad = 1;//habilita para volver a leer la emisividad
-
+*/
     break;
     case 'P':
       //imprimir por pantalla todos los valores adquiridos
@@ -1360,6 +1365,7 @@ void switchCaseParametros(char charParamID, String valorParam){
 
     break;
     case 'c':
+	/*
       correccionActivada = valorParam.toInt();//1 para activarlo; 0 para desactivarlo
       Serial.print("correccionActivada: ");
       Serial.println(correccionActivada);
@@ -1368,7 +1374,7 @@ void switchCaseParametros(char charParamID, String valorParam){
       }else{
         flagCorreccion = 0;
       }
-
+*/
     break;
     case 'A':
       
@@ -1389,6 +1395,7 @@ void switchCaseParametros(char charParamID, String valorParam){
 
     break;
     case 's':
+	/*
       scanActivado = valorParam.toInt();//1 para activarlo; 0 para desactivarlo
       Serial.print("scanActivado: ");
       Serial.println(scanActivado);
@@ -1397,6 +1404,7 @@ void switchCaseParametros(char charParamID, String valorParam){
       }else{
         flagScan = 0;
       }
+	  */
     break;
     case 'U':
       analizarLecturasCantidad = valorParam.toInt();
