@@ -66,6 +66,8 @@
 
 
 
+#define LED_ONBOARD 2
+
 // define the number of bytes you want to access
 #define EEPROM_SIZE 300
 #define EEPROM_ADDRESS_WIFI_SSID 20//String
@@ -110,6 +112,7 @@ char tempAmbiente_topic_subscribe[100] = "INTI/Electronica/esp32/sensor_1";//"un
 char tempAmbiente_topic_publish[100] = "INTI/Electronica/esp32/sensor_1";//"undefi/handtemp/1/tempAmbiente";
 char tempObjeto_topic_subscribe[100] = "INTI/Electronica/esp32/sensor_1";//"undefi/handtemp/1/tempObjeto";
 char tempObjeto_topic_publish[100] = "INTI/Electronica/esp32/sensor_1";//"undefi/handtemp/1/tempObjeto";
+char data_topic_publish[100] = "INTI/Electronica/esp32/data/sensor_1";//"undefi/handtemp/1/tempObjeto";
 char handtempKeepAlive_topic_publish[100] = "INTI/Electronica/esp32/keepAlive/sensor_1";
 
 
@@ -128,6 +131,7 @@ char flagProceso2 = 0;
 char flagProceso3 = 0;
 int contadorProceso1 = 0;
 int contadorProceso2 = 0;
+int contadorProceso3 = 0;
 int flagCambioModoLocal = 0;
 int cantFallos = 0;
 //int tiempoEntreLecturas = 10;
@@ -247,6 +251,7 @@ void cambioDeParametros(void);
 //void grabarEmisividadEnSensorIR(void);
 void publicarDataAmbiente(double, char[]);
 void publicarDataObjeto(double, double, double, char[]);
+void publicarData(long);
 void obtenerFechaHora(void);
 
 void encenderNeopixel(char);
@@ -269,14 +274,18 @@ void IRAM_ATTR onTimer3() {
 
     contadorProceso1++;
     contadorProceso2++;
+	contadorProceso3++;
 
-    if(contadorProceso1 == tiempo1){//proceso 1
+    if(contadorProceso1 == tiempo1/6){//proceso 1
         contadorProceso1 = 0;//resetea el contador
         flagProceso1 = 1;
+    }
+	if(contadorProceso2 == tiempo1){//proceso 2
+        contadorProceso2 = 0;//resetea el contador
         flagProceso2 = 1;
     }
-    if(contadorProceso2 == tiempo1 * 10){//proceso 2 (cada 10 min)
-        contadorProceso2 = 0;//resetea el contador
+    if(contadorProceso3 == tiempo1 * 10){//proceso 3 (cada 10 min)
+        contadorProceso3 = 0;//resetea el contador
         flagProceso3 = 1;//para chequear conexión con red wifi y broker
     }
 
@@ -305,6 +314,10 @@ void setup() {
 
     ssid = "wifi01-ei";
     password = "Ax32MnF1975-ReB";
+
+	client1.subscribe(root_topic_subscribe);
+
+	randomSeed(analogRead(27));
     
 
     timer3 = timerBegin(2, 80, true);
@@ -317,6 +330,7 @@ void setup() {
 
     mlx1.begin();
 
+	pinMode(LED_ONBOARD, OUTPUT);
     //digitalWrite(buzzPin, HIGH);
     //cargarDesdeEEPROM();//levanta las variables guardadas previamente en EEPROM
     
@@ -352,10 +366,17 @@ void setup() {
 
 void loop() {
     
+	long numero = 0;
 
     cambioDeParametros();
 
     client1.loop();
+
+	if(flagProceso1 == 1){
+		flagProceso1 = 0;
+		numero = random(1,50);
+		publicarData(numero);
+	}
 
     //Keep Alive
     //Si está en modo Red y pasó cierto tiempo y la conexión está OK
@@ -539,6 +560,11 @@ void reconnect() {
     if(resultado == 1){
       Serial.println("Conectado!");
       flagConexionOK = 1;
+	  if(client1.subscribe(root_topic_subscribe)){
+        Serial.println("Suscripcion ok");
+	  }else{
+        Serial.println("fallo Suscripciión");
+      }
     
     }else{
       
@@ -598,6 +624,7 @@ void callback(char* topic, byte* payload, unsigned int length){
   String valorParam = "";
   int inChar = 0;
   
+  
 
   Serial.print("Mensaje recibido desde -> ");
   Serial.print(topic);
@@ -612,6 +639,14 @@ void callback(char* topic, byte* payload, unsigned int length){
 
   //obtiene el identificador
   charParamID = incoming.charAt(0);
+
+  if(charParamID == 'P'){
+	  Serial.println("Llegó una P");
+	  digitalWrite(LED_ONBOARD, HIGH);
+  }else if(charParamID == 'A'){
+	  Serial.println("Llegó una A");
+	  digitalWrite(LED_ONBOARD, LOW);
+  }
   
   Serial.println(charParamID);
   
@@ -622,8 +657,10 @@ void callback(char* topic, byte* payload, unsigned int length){
 
   Serial.println(valorParam);
 
+
+
   //evalua el identificador y los parámetros enviados
-  switchCaseParametros(charParamID, valorParam);
+//  switchCaseParametros(charParamID, valorParam);
 
   //borra el contenido y lo prepara para recibir uno nuevo
   incoming = "";
@@ -1015,6 +1052,22 @@ void publicarDataAmbiente(double tempAmbienteC, char fechaHora[]){
   client1.publish(tempAmbiente_topic_publish, JSONmessageBuffer);
 }
 
+void publicarData(long dato){
+        
+  //prepara el objeto JSON para publicar por MQTT
+  StaticJsonBuffer<300> JSONbuffer;
+  JsonObject& JSONencoder = JSONbuffer.createObject();
+ 
+  JSONencoder["dato"] = round(dato * 100) / 100;
+  
+  char JSONmessageBuffer[300];
+  JSONencoder.printTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
+  Serial.println("Enviando data por MQTT1...");
+  Serial.println(JSONmessageBuffer);
+
+  client1.publish(data_topic_publish, JSONmessageBuffer);
+
+}
 
 void encenderNeopixel(char color){
 
