@@ -119,7 +119,9 @@
                 "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/lib/gcc/xtensa-esp32-elf/5.2.0/include",
                 "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/lib/gcc/xtensa-esp32-elf/5.2.0/include-fixed",
                 "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/include",
-                "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/sysroot/usr/include"
+                "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/sysroot/usr/include",
+                "C:\\Users\\martin\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\1.0.4\\**",
+                "C:\\Users\\martin\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\**"
             ],
             "forcedInclude": [
                 "/home/martin/.arduino15/packages/esp32/hardware/esp32/1.0.6/cores/esp32/Arduino.h"
@@ -368,6 +370,13 @@
                 "__ATOMIC_RELEASE=3",
                 "USBCON"
             ]
+        },
+        {
+            "name": "Win32",
+            "includePath": [
+                "C:\\Users\\martin\\Documents\\Arduino\\libraries\\WebSerial\\src"
+            ],
+            "forcedInclude": []
         }
     ]
 }
