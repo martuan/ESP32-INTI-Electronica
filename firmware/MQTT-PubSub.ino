@@ -104,8 +104,8 @@ String nombreSens = "sensor_1";
 //const char *mqtt_server = "broker.hivemq.com";//"10.24.37.150";//"broker.hivemq.com";//"test.mosquitto.org";//"10.24.37.150";//"broker.hivemq.com";//"10.24.37.150";//"broker.hivemq.com";
 char mqtt_server[100] = "broker.hivemq.com";
 const int mqtt_port = 1883;
-const char *mqtt_user = "";
-const char *mqtt_pass = "";
+const char *mqtt_user = "pentium";
+const char *mqtt_pass = "7364";
 char root_topic_subscribe[100] = "INTI/Electronica/esp32/sensor_1";//"undefi";
 char root_topic_publish[100] = "INTI/Electronica/esp32/sensor_1";//"undefi";
 char tempAmbiente_topic_subscribe[100] = "INTI/Electronica/esp32/sensor_1";//"undefi/handtemp/1/tempAmbiente";
@@ -563,7 +563,7 @@ void reconnect() {
 	  if(client1.subscribe(root_topic_subscribe)){
         Serial.println("Suscripcion ok");
 	  }else{
-        Serial.println("fallo Suscripciión");
+        Serial.println("fallo Suscripción");
       }
     
     }else{
