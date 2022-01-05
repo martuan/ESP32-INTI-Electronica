@@ -45,10 +45,8 @@
 #include <Arduino.h>
 #include <PubSubClient.h>
 #include <Wire.h>
-#include <Adafruit_MLX90614_modificado.h>
 #include <SparkFunMLXm.h>
 #include <ArduinoJson.h>
-#include <NewPing.h>
 #include <SPI.h>
 #include <Adafruit_SH1106.h>
 #include <Adafruit_GFX.h>
@@ -63,6 +61,11 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager  
+//#include <webserial_webpage.h>
+#include <WebSerial.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+
 
 
 
@@ -92,7 +95,7 @@ Adafruit_SH1106 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
 #define CANTLEDS  16
 // When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
 // Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(CANTLEDS, PIN, NEO_GRB + NEO_KHZ800);
+//Adafruit_NeoPixel pixels = Adafruit_NeoPixel(CANTLEDS, PIN, NEO_GRB + NEO_KHZ800);
 
 //**************************************
 //*********** MQTT CONFIG **************
@@ -134,15 +137,9 @@ int contadorProceso2 = 0;
 int contadorProceso3 = 0;
 int flagCambioModoLocal = 0;
 int cantFallos = 0;
-//int tiempoEntreLecturas = 10;
-//int cantLecturas = 20;
+
 int flagModoDebug = 0;
-//int tiempoMinutoSinReset = 0;
-//int tiempoHoraSinReset = 0;
-//int tiempoDiaSinReset = 0;
-//int cantSensoresIR = 1;
-//int flagLecturaEmisividad = 1;
-//int flagLecturasErroneas = 0;
+
 float arrayUltimasLecturas[100] = {};
 int idx2 = 0;
 int flagUltimasLecturas = 0;
@@ -152,10 +149,7 @@ int Red = 0;
 int Green = 0;
 int Blue = 0;
 int neopixelFueApagado = 0;
-//char tiempoSinReset[50] = {};
 char msgKeepAlive[150] = {};
-//int flagCorreccion = 1;//0;
-//int flagScan = 0;
 int flagModoRed = 0;
 int timeLED = 1000;
 String strEEPROM = "";
@@ -170,8 +164,6 @@ String savedSSID = {};
 String savedPASS = {};
 String ssid = {};
 String password = {};
-//char flagVieneDelReset = 0;
-//char flagModoAPforzado = 0;
 char flagOTA = 0;
 String ssidOTA = {};
 String passwordOTA = {};
@@ -194,8 +186,6 @@ uint8_t flagOTAEEPROM = 0;
 String wifiSSIDEEPROM = {};
 String wifiPASSEEPROM = {};
 // **************** EEPROM *************************
-
-Adafruit_MLX90614 mlx1 = Adafruit_MLX90614(90);//address (0x00 to 0x07F)
 
 //**** NTP CONFIG (hora mundial) ********
 const char* ntpServer = "pool.ntp.org";//server del rtc global
@@ -223,6 +213,8 @@ auto mainFont = &FreeSans12pt7b;
 auto font1 = &FreeSans9pt7b;
 auto font2 = &FreeSans12pt7b;
 auto font3 = &FreeSans18pt7b;
+
+AsyncWebServer server(80);
 
 //**************************************
 //*********** BLUETOOTH  *****************
@@ -259,7 +251,6 @@ void apagarNeopixel(void);
 void publicarKeepAlive(void);
 void cambiarConfigMQTT(uint8_t);
 void comprobarConexion(void);
-//void intercambiarSensores(void);
 void probarNeopixel(void);
 void setupModoRed(void);
 void fallaConexion(void);
@@ -268,13 +259,14 @@ void switchCaseParametros(char, String);
 void modoAccessPoint(void);
 void imprimirModo(void);
 void handTempText(void);
+void recvMsg(uint8_t *, size_t);
 
 //timer de usos generales 1000ms
 void IRAM_ATTR onTimer3() {
 
     contadorProceso1++;
     contadorProceso2++;
-	contadorProceso3++;
+	  contadorProceso3++;
 
     if(contadorProceso1 == tiempo1/6){//proceso 1
         contadorProceso1 = 0;//resetea el contador
@@ -303,6 +295,7 @@ void IRAM_ATTR onTimer3() {
 void setup() {
     
     WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
+    
     Serial.begin(115200);
         
 
@@ -312,12 +305,14 @@ void setup() {
     macAdd = WiFi.macAddress();
     Serial.println( "MAC address: " + macAdd );
 
-    ssid = "wifi01-ei";
-    password = "Ax32MnF1975-ReB";
+    //ssid = "wifi01-ei";
+    //password = "Ax32MnF1975-ReB";
+    ssid = "milton";
+    password = "paternal";
 
-	client1.subscribe(root_topic_subscribe);
+	  client1.subscribe(root_topic_subscribe);
 
-	randomSeed(analogRead(27));
+	  randomSeed(analogRead(27));
     
 
     timer3 = timerBegin(2, 80, true);
@@ -328,9 +323,7 @@ void setup() {
     esp_task_wdt_init(WDT_TIMEOUT, true); //enable panic so ESP32 restarts
     esp_task_wdt_add(NULL); //add current thread to WDT watch
 
-    mlx1.begin();
-
-	pinMode(LED_ONBOARD, OUTPUT);
+    pinMode(LED_ONBOARD, OUTPUT);
     //digitalWrite(buzzPin, HIGH);
     //cargarDesdeEEPROM();//levanta las variables guardadas previamente en EEPROM
     
@@ -345,14 +338,17 @@ void setup() {
     // pantalla de bienvenida
     handTempText();
 
-    pixels.begin(); // This initializes the NeoPixel library.
-    probarNeopixel();
+    //pixels.begin(); // This initializes the NeoPixel library.
+    //probarNeopixel();
   
     setupModoRed();//configura MQTT, revisa conectividad
-  
+
 
     imprimirModo();//informa por display Modo local o Modo Red
 
+    WebSerial.begin(&server);
+    WebSerial.msgCallback(recvMsg);
+    server.begin();
 
     
     
@@ -366,37 +362,32 @@ void setup() {
 
 void loop() {
     
-	long numero = 0;
+	  long numero = 0;
 
     cambioDeParametros();
 
     client1.loop();
+    WebSerial.println("Hello!");
 
-	if(flagProceso1 == 1){
-		flagProceso1 = 0;
-		numero = random(1,50);
-		publicarData(numero);
-	}
+    if(flagProceso1 == 1){//publica cada cierto tiempo un número aleatorio en formato json
+      flagProceso1 = 0;
+      numero = random(1,50);
+      publicarData(numero);
+    }
 
     //Keep Alive
-    //Si está en modo Red y pasó cierto tiempo y la conexión está OK
-    if(flagProceso2 == 1 && flagConexionOK == 1){//Modo RED
+    //Si pasó cierto tiempo y la conexión está OK
+    if(flagProceso2 == 1 && flagConexionOK == 1){
     
       flagProceso2 = 0;
     
       if(client1.connected()){
         publicarKeepAlive();
       }else{
-        Serial.println("MODO LOCAL...(temporal)");
+        Serial.println("Perdió la conexión");
         flagConexionOK = 0;//hubo un problema, lo avisa mediante el flag
       }
    
-    }
-
-    
-    //apagar LEDs Neopixel
-    if(neopixelFueApagado == 0){//si no fue apagado, apagar
-      apagarNeopixel();
     }
 
     //alimentar watchDog
@@ -406,17 +397,10 @@ void loop() {
 
     
 
-    //cada cierto tiempo chequea la conexión MQTT
-    //si el switch de modo esta en red, pero perdió la conexión
-    //lecturaSwitchMODO = analogRead(switchDeModo);
-	lecturaSwitchMODO = 0;
-    //if(flagProceso3 && (analogRead(switchDeModo) == 0) && flagConexionOK == 0){
-    if(flagProceso3 && lecturaSwitchMODO == 0 && flagConexionOK == 0){
-      //prueba, ver valor del ADC
-      Serial.print("lecturaSwitchMODO = ");
-      Serial.println(lecturaSwitchMODO);
+    //cada cierto tiempo chequea la conexión MQTT solo si la perdió
 
-      
+    if(flagProceso3 && flagConexionOK == 0){
+
       flagProceso3 = 0;
       displayText('R');
       Serial.println("Intentando recuperar la conexión");
@@ -1068,7 +1052,7 @@ void publicarData(long dato){
   client1.publish(data_topic_publish, JSONmessageBuffer);
 
 }
-
+/*
 void encenderNeopixel(char color){
 
     int i = 0;
@@ -1119,8 +1103,9 @@ void encenderNeopixel(char color){
     neopixelFueApagado = 0;//cambia el estado
     
 }
+*/
 
-
+/*
 void apagarNeopixel(void){
 
     int i = 0;
@@ -1142,6 +1127,7 @@ void apagarNeopixel(void){
     neopixelFueApagado = 1;//cambia el estado
      
 }
+*/
 
 void publicarKeepAlive(void){
   
@@ -1621,7 +1607,7 @@ void setupModoRed(void){
   }
 
 }
-
+/*
 void probarNeopixel(void){
 
   //prueba de LEDs Neopixel
@@ -1644,7 +1630,7 @@ void probarNeopixel(void){
   delay(timeLED);
 
 }
-
+*/
 void displayText(char letra){
 
   int timeDisplayBienvenida = 1000;
@@ -1676,4 +1662,19 @@ void displayText(char letra){
   display.clearDisplay();
   display.setFont(mainFont);  
 
+}
+
+void recvMsg(uint8_t *data, size_t len){
+  WebSerial.println("Received Data...");
+  String d = "";
+  for(int i=0; i < len; i++){
+    d += char(data[i]);
+  }
+  WebSerial.println(d);
+  if (d == "ON"){
+    digitalWrite(LED_ONBOARD, HIGH);
+  }
+  if (d == "OFF"){
+    digitalWrite(LED_ONBOARD, LOW);
+  }
 }
