@@ -305,10 +305,10 @@ void setup() {
     macAdd = WiFi.macAddress();
     Serial.println( "MAC address: " + macAdd );
 
-    //ssid = "wifi01-ei";
-    //password = "Ax32MnF1975-ReB";
-    ssid = "milton";
-    password = "paternal";
+    ssid = "wifi01-ei";
+    password = "Ax32MnF1975-ReB";
+    //ssid = "milton";
+    //password = "paternal";
 
 	  client1.subscribe(root_topic_subscribe);
 
@@ -367,7 +367,7 @@ void loop() {
     cambioDeParametros();
 
     client1.loop();
-    WebSerial.println("Hello!");
+    //WebSerial.println("Hello!");
 
     if(flagProceso1 == 1){//publica cada cierto tiempo un número aleatorio en formato json
       flagProceso1 = 0;
@@ -383,6 +383,7 @@ void loop() {
     
       if(client1.connected()){
         publicarKeepAlive();
+		
       }else{
         Serial.println("Perdió la conexión");
         flagConexionOK = 0;//hubo un problema, lo avisa mediante el flag
@@ -1048,6 +1049,7 @@ void publicarData(long dato){
   JSONencoder.printTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
   Serial.println("Enviando data por MQTT1...");
   Serial.println(JSONmessageBuffer);
+  WebSerial.println(JSONmessageBuffer);
 
   client1.publish(data_topic_publish, JSONmessageBuffer);
 
@@ -1140,6 +1142,7 @@ void publicarKeepAlive(void){
   client1.publish(handtempKeepAlive_topic_publish, msgKeepAlive);
   Serial.println(handtempKeepAlive_topic_publish);
   Serial.println(msgKeepAlive);
+  WebSerial.println(msgKeepAlive);
 
 }
 

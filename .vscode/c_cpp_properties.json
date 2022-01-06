@@ -94,10 +94,8 @@
                 "/home/martin/.arduino15/packages/esp32/hardware/esp32/1.0.6/variants/esp32",
                 "/home/martin/Descargas/ARDUINOIDE/arduino-1.8.8/libraries/PubSubClient/src",
                 "/home/martin/.arduino15/packages/esp32/hardware/esp32/1.0.6/libraries/Wire/src",
-                "/home/martin/Descargas/ARDUINOIDE/arduino-1.8.8/libraries/Adafruit-MLX90614-Library-master-Modificado",
                 "/home/martin/Descargas/ARDUINOIDE/arduino-1.8.8/libraries/SparkFunMLX90614_Modificado",
                 "/home/martin/Descargas/ARDUINOIDE/arduino-1.8.8/libraries/ArduinoJson-5.13.5/src",
-                "/home/martin/Descargas/ARDUINOIDE/arduino-1.8.8/libraries/NewPing/src",
                 "/home/martin/.arduino15/packages/esp32/hardware/esp32/1.0.6/libraries/SPI/src",
                 "/home/martin/Descargas/ARDUINOIDE/arduino-1.8.8/libraries/esp32-sh1106-oled-master",
                 "/home/martin/Documentos/Arduino Projects/libraries/Adafruit_GFX_Library",
@@ -111,17 +109,18 @@
                 "/home/martin/Documentos/Arduino Projects/libraries/WiFiManager",
                 "/home/martin/.arduino15/packages/esp32/hardware/esp32/1.0.6/libraries/WebServer/src",
                 "/home/martin/.arduino15/packages/esp32/hardware/esp32/1.0.6/libraries/DNSServer/src",
-                "/home/martin/Documentos/Arduino Projects/libraries/Adafruit_BusIO",
+                "/home/martin/Documentos/Arduino Projects/libraries/WebSerial/src",
+                "/home/martin/Descargas/ARDUINOIDE/arduino-1.8.8/libraries/AsyncTCP-master/src",
+                "/home/martin/Descargas/ARDUINOIDE/arduino-1.8.8/libraries/ESPAsyncWebServer-master/src",
                 "/home/martin/.arduino15/packages/esp32/hardware/esp32/1.0.6/libraries/FS/src",
+                "/home/martin/Documentos/Arduino Projects/libraries/Adafruit_BusIO",
                 "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/include/c++/5.2.0",
                 "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/include/c++/5.2.0/xtensa-esp32-elf",
                 "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/include/c++/5.2.0/backward",
                 "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/lib/gcc/xtensa-esp32-elf/5.2.0/include",
                 "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/lib/gcc/xtensa-esp32-elf/5.2.0/include-fixed",
                 "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/include",
-                "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/sysroot/usr/include",
-                "C:\\Users\\martin\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\1.0.4\\**",
-                "C:\\Users\\martin\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\**"
+                "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/sysroot/usr/include"
             ],
             "forcedInclude": [
                 "/home/martin/.arduino15/packages/esp32/hardware/esp32/1.0.6/cores/esp32/Arduino.h"
@@ -373,10 +372,16 @@
         },
         {
             "name": "Win32",
+            "compilerPath": "",
+            "compilerArgs": [],
+            "intelliSenseMode": "",
             "includePath": [
                 "C:\\Users\\martin\\Documents\\Arduino\\libraries\\WebSerial\\src"
             ],
-            "forcedInclude": []
+            "forcedInclude": [],
+            "cStandard": "",
+            "cppStandard": "",
+            "defines": []
         }
     ]
 }
