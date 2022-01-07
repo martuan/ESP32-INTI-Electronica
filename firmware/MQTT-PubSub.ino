@@ -260,6 +260,7 @@ void modoAccessPoint(void);
 void imprimirModo(void);
 void handTempText(void);
 void recvMsg(uint8_t *, size_t);
+void setup_mqtt(void);
 
 //timer de usos generales 1000ms
 void IRAM_ATTR onTimer3() {
@@ -443,9 +444,9 @@ void setup_wifi(){
   //reset settings - wipe credentials for testing
   //wm.resetSettings();
 
-    WiFiManager wm;
+    //WiFiManager wm;
    
-    bool res;
+    //bool res;
    
 
 
@@ -466,12 +467,12 @@ void setup_wifi(){
       const char* ssidConverted = ssid.c_str();
       const char* passwordConverted = password.c_str();
         
-      WiFi.disconnect(1);
+      //WiFi.disconnect(1);
         
-      WiFi.persistent(false);
+      //WiFi.persistent(false);
       WiFi.begin(ssidConverted, passwordConverted);
 
-      while ((WiFi.status() != WL_CONNECTED) && cuenta < 20) {
+      while ((WiFi.status() != WL_CONNECTED) && cuenta < 20) {//límite de 20 intentos de 500 ms
         delay(500);
         Serial.print(".");
         cuenta++;
@@ -481,20 +482,9 @@ void setup_wifi(){
       
         Serial.println("No es posible conectar a WiFi");
         Serial.println("Se cambia a MODO LOCAL");
-        //flagModoAP = 1;//prepara para ponerse en modo Access Point
-        //guarda en EEPROM el flag de modo AP
-        //EEPROM.write(EEPROM_ADDRESS_FLAG_MODO_AP, flagModoAP);
-        //EEPROM.commit();
-        //flagConexionOK = 0;
-        //flagCambioModoLocal = 1;
-        //flagModoRed = 0;
-        //fallaConexion();
 
       }else{//si logró conectarse
 
-        //flagConexionOK = 1;
-        //flagCambioModoLocal = 0;
-        //flagModoRed = 1;
         Serial.println("");
         Serial.println("Conectado a red WiFi!");
         Serial.println("Dirección IP: ");
@@ -502,13 +492,6 @@ void setup_wifi(){
         delay(5000);
 
       }
-
-
-      //wm.setConnectTimeout(10);//timeout de reconexión (10 segundos)
-      //wm.startConfigPortal("MedTemp", "12345678");
-      //res = wm.autoConnect(savedSSID.c_str(),savedPASS.c_str()); // password protected ap
-    
-        //modoAccessPoint();
 
 
 }
@@ -1583,31 +1566,12 @@ void switchCaseParametros(char charParamID, String valorParam){
 void setupModoRed(void){
 
   setup_wifi();
+  setup_mqtt();
 
   //init and get the time
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  //configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   //mqtt_server = "broker.hivemq.com";
-  client1.setServer(mqtt_server, mqtt_port);//inicializa server en broker local
-  //client1.setServer("broker.hivemq.com", mqtt_port);//inicializa server en broker local
-  client1.setCallback(callback);
-
-  //intenta conectar con MQTT
-  if(!client1.connected()){
-    reconnect();//si no está conectado, lo reconecta
-  }
-  if(client1.connected()){//si logró reconectarse o ya estaba conectado
-    Serial.println("Conexión OK: Wifi y MQTT conectados");
-    Serial.println("MODO RED");
-    //flagCambioModoLocal = 0;//no hace falta cambiar a modo local
-    flagConexionOK = 1;
-    
-  }else{
-    Serial.println("Conexión Errónea: Wifi y MQTT no conectados");
-    Serial.println("MODO LOCAL...(temporal)");
-    //flagCambioModoLocal = 1;
-    //flagModoRed = 0;
-    flagConexionOK = 0;
-  }
+  
 
 }
 /*
@@ -1680,4 +1644,30 @@ void recvMsg(uint8_t *data, size_t len){
   if (d == "OFF"){
     digitalWrite(LED_ONBOARD, LOW);
   }
+}
+
+void setup_mqtt(void){
+
+	client1.setServer(mqtt_server, mqtt_port);//inicializa server en broker local
+	//client1.setServer("broker.hivemq.com", mqtt_port);//inicializa server en broker local
+	client1.setCallback(callback);
+
+	//intenta conectar con MQTT
+	if(!client1.connected()){
+		reconnect();//si no está conectado, lo reconecta
+	}
+	if(client1.connected()){//si logró reconectarse o ya estaba conectado
+		Serial.println("Conexión OK: Wifi y MQTT conectados");
+		Serial.println("MODO RED");
+		//flagCambioModoLocal = 0;//no hace falta cambiar a modo local
+		flagConexionOK = 1;
+		
+	}else{
+		Serial.println("Conexión Errónea: Wifi y MQTT no conectados");
+		Serial.println("MODO LOCAL...(temporal)");
+		//flagCambioModoLocal = 1;
+		//flagModoRed = 0;
+		flagConexionOK = 0;
+	}
+
 }
