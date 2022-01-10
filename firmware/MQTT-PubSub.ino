@@ -66,8 +66,42 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 
+#include <WiFiClientSecure.h>
+#include <UniversalTelegramBot.h>   // Universal Telegram Bot Library written by Brian Lough: https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot
+//#include <ArduinoJson.h>
 
 
+#ifdef ESP32
+  #include <WiFi.h>
+#else
+  #include <ESP8266WiFi.h>
+#endif
+
+//************CONFIGURACIÓN DE TELEGRAM*****************
+
+// Initialize Telegram BOT
+#define BOTtoken "5021419842:AAGWdRxVtpBNxiWtD3oEDN_CIkK1LnuqefE"  // your Bot Token (Get from Botfather)
+
+// Use @myidbot to find out the chat ID of an individual or a group
+// Also note that you need to click "start" on a bot before it can
+// message you
+#define CHAT_ID "1461403941"
+
+#ifdef ESP8266
+  X509List cert(TELEGRAM_CERTIFICATE_ROOT);
+#endif
+
+WiFiClientSecure client;
+UniversalTelegramBot bot(BOTtoken, client);
+
+// Checks for new messages every 1 second.
+int botRequestDelay = 1000;
+unsigned long lastTimeBotRan;
+
+const int ledPin = 2;
+bool ledState = LOW;
+
+//************CONFIGURACIÓN DE TELEGRAM*****************
 
 #define LED_ONBOARD 2
 
@@ -261,6 +295,7 @@ void imprimirModo(void);
 void handTempText(void);
 void recvMsg(uint8_t *, size_t);
 void setup_mqtt(void);
+void handleNewMessages(int);
 
 //timer de usos generales 1000ms
 void IRAM_ATTR onTimer3() {
@@ -313,7 +348,12 @@ void setup() {
 
 	  client1.subscribe(root_topic_subscribe);
 
-	  randomSeed(analogRead(27));
+	#ifdef ESP8266
+    	configTime(0, 0, "pool.ntp.org");      // get UTC time via NTP
+    	client.setTrustAnchors(&cert); // Add root certificate for api.telegram.org
+  	#endif
+
+	randomSeed(analogRead(27));
     
 
     timer3 = timerBegin(2, 80, true);
@@ -325,6 +365,12 @@ void setup() {
     esp_task_wdt_add(NULL); //add current thread to WDT watch
 
     pinMode(LED_ONBOARD, OUTPUT);
+	pinMode(ledPin, OUTPUT);
+  	digitalWrite(ledPin, ledState);
+
+	#ifdef ESP32
+		client.setCACert(TELEGRAM_CERTIFICATE_ROOT); // Add root certificate for api.telegram.org
+	#endif	  
     //digitalWrite(buzzPin, HIGH);
     //cargarDesdeEEPROM();//levanta las variables guardadas previamente en EEPROM
     
@@ -362,8 +408,21 @@ void setup() {
 
 
 void loop() {
+
+	//Chequea cada cierto tiempo mensajes enviados por Telegram
+
+	if (millis() > lastTimeBotRan + botRequestDelay)  {
+    int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+
+    while(numNewMessages) {
+      Serial.println("got response");
+      handleNewMessages(numNewMessages);
+      numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+    }
+    lastTimeBotRan = millis();
+  	}
     
-	  long numero = 0;
+	long numero = 0;
 
     cambioDeParametros();
 
@@ -986,9 +1045,11 @@ void obtenerFechaHora(void){
 
 void publicarDataObjeto(double tempC, double tempF, double emisividadL, char fechaHora[]){
         
+/*		
   //prepara el objeto JSON para publicar por MQTT
-  StaticJsonBuffer<300> JSONbuffer;
-  JsonObject& JSONencoder = JSONbuffer.createObject();
+  //StaticJsonBuffer<300> JSONbuffer;
+  StaticJsonDocument<300> JSONbuffer;
+  JsonObject JSONencoder = JSONbuffer.createObject();
  
   JSONencoder["temp"] = round(tempC * 100) / 100;
   
@@ -998,15 +1059,16 @@ void publicarDataObjeto(double tempC, double tempF, double emisividadL, char fec
   Serial.println(JSONmessageBuffer);
 
   client1.publish(tempObjeto_topic_publish, JSONmessageBuffer);
-
+*/
 }
 
 void publicarDataAmbiente(double tempAmbienteC, char fechaHora[]){
-
+/*
         
   //prepara el objeto JSON para publicar por MQTT
-  StaticJsonBuffer<300> JSONbuffer;
-  JsonObject& JSONencoder = JSONbuffer.createObject();
+  //StaticJsonBuffer<300> JSONbuffer;
+  StaticJsonDocument<300> JSONbuffer;
+  JsonObject JSONencoder = JSONbuffer.createObject();
 
   JSONencoder["device"] = "ESP32";
   JSONencoder["Temp Ambiente *C"] = round(tempAmbienteC * 100) / 100 ;
@@ -1018,13 +1080,27 @@ void publicarDataAmbiente(double tempAmbienteC, char fechaHora[]){
   Serial.println(JSONmessageBuffer);
   
   client1.publish(tempAmbiente_topic_publish, JSONmessageBuffer);
+  */
 }
 
 void publicarData(long dato){
-        
+
+
+/*
+//***************VER de convertir a JSON 6 ******************
+
+	// ArduinoJson 6
+	DynamicJsonDocument doc(1024);
+	doc["key"] = "value";
+	doc["raw"] = serialized("[1,2,3]");
+	serializeJson(doc, Serial);
+*/
+
+  /*      
   //prepara el objeto JSON para publicar por MQTT
-  StaticJsonBuffer<300> JSONbuffer;
-  JsonObject& JSONencoder = JSONbuffer.createObject();
+  //StaticJsonBuffer<300> JSONbuffer;
+  StaticJsonDocument<300> JSONbuffer;
+  JsonObject JSONencoder = JSONbuffer.createObject();
  
   JSONencoder["dato"] = round(dato * 100) / 100;
   
@@ -1035,7 +1111,7 @@ void publicarData(long dato){
   WebSerial.println(JSONmessageBuffer);
 
   client1.publish(data_topic_publish, JSONmessageBuffer);
-
+*/
 }
 /*
 void encenderNeopixel(char color){
@@ -1670,4 +1746,55 @@ void setup_mqtt(void){
 		flagConexionOK = 0;
 	}
 
+}
+
+// Handle what happens when you receive new messages
+void handleNewMessages(int numNewMessages) {
+  Serial.println("handleNewMessages");
+  Serial.println(String(numNewMessages));
+
+  for (int i=0; i<numNewMessages; i++) {
+    // Chat id of the requester
+    String chat_id = String(bot.messages[i].chat_id);
+    if (chat_id != CHAT_ID){
+      bot.sendMessage(chat_id, "Unauthorized user", "");
+      continue;
+    }
+    
+    // Print the received message
+    String text = bot.messages[i].text;
+    Serial.println(text);
+
+    String from_name = bot.messages[i].from_name;
+
+    if (text == "/start") {
+      String welcome = "Welcome, " + from_name + ".\n";
+      welcome += "Use the following commands to control your outputs.\n\n";
+      welcome += "/led_on to turn GPIO ON \n";
+      welcome += "/led_off to turn GPIO OFF \n";
+      welcome += "/state to request current GPIO state \n";
+      bot.sendMessage(chat_id, welcome, "");
+    }
+
+    if (text == "/led_on") {
+      bot.sendMessage(chat_id, "LED state set to ON", "");
+      ledState = HIGH;
+      digitalWrite(ledPin, ledState);
+    }
+    
+    if (text == "/led_off") {
+      bot.sendMessage(chat_id, "LED state set to OFF", "");
+      ledState = LOW;
+      digitalWrite(ledPin, ledState);
+    }
+    
+    if (text == "/state") {
+      if (digitalRead(ledPin)){
+        bot.sendMessage(chat_id, "LED is ON", "");
+      }
+      else{
+        bot.sendMessage(chat_id, "LED is OFF", "");
+      }
+    }
+  }
 }
