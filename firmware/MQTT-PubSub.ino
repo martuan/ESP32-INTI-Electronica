@@ -1,5 +1,5 @@
 /*
-  ESP32-INTI-Electrónica
+  ESP32-INTI-Electrónica (NESTOR)
   Versión 1.0
   Fecha   13/01/2022
   Link    https://github.com/martuan/ESP32-INTI-Electronica/
@@ -66,6 +66,7 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 //BLA BLA BLA
+//NESTOR
 
 
 
