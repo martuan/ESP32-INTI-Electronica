@@ -1,7 +1,7 @@
 /*
   ESP32-INTI-Electrónica
   Versión 1.0
-  Fecha   13/12/2021
+  Fecha   15/01/2022
   Link    https://github.com/martuan/ESP32-INTI-Electronica/
 
   Sistema IoT para diversas aplicaciones en INTI con capacidad de 
@@ -40,9 +40,10 @@
   *  Se cambia tiempo de reconexión a la red
   *  Se contabilizan las reconexiones exitosas y las fallidas
   *  Imprime por bluetooth las credenciales wifi almacenadas en EEPROM
+  *  Permite interactuar desde un bot de Telegram
 */
 
-// #include <Arduino.h>
+#include <Arduino.h>
  #include <PubSubClient.h>
 // #include <Wire.h>
 // #include <SparkFunMLXm.h>
@@ -70,42 +71,46 @@
 
 #include <WiFiClientSecure.h>
 #include <UniversalTelegramBot.h>   // Universal Telegram Bot Library written by Brian Lough: https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot
-//#include <ArduinoJson.h>
+#include <ArduinoJson.h>
+#include <WiFi.h>
+#include <time.h>
+#include <AsyncTelegram2.h>
+#include <WiFiClient.h>
+#include <SSLClient.h>  
+#include "tg_certificate.h"
 //#include <PubSubClient.h>
 
-#ifdef ESP32
-  #include <WiFi.h>
-#else
-  #include <ESP8266WiFi.h>
+
+#ifndef ESP32
+  #define ESP32
 #endif
+#define LED_BUILTIN 2
+#define LED_ONBOARD 2
 
 //************CONFIGURACIÓN DE TELEGRAM*****************
 
-// Initialize Telegram BOT
-#define BOTtoken "5021419842:AAGWdRxVtpBNxiWtD3oEDN_CIkK1LnuqefE"  // your Bot Token (Get from Botfather)
+#define USE_CLIENTSSL true  
+// Timezone definition
+#define MYTZ "CET-1CEST,M3.5.0,M10.5.0/3"
 
-// Use @myidbot to find out the chat ID of an individual or a group
-// Also note that you need to click "start" on a bot before it can
-// message you
-#define CHAT_ID "1461403941"
+WiFiClient base_client;
+SSLClient client(base_client, TAs, (size_t)TAs_NUM, A0, 1, SSLClient::SSL_ERROR);
 
-#ifdef ESP8266
-  X509List cert(TELEGRAM_CERTIFICATE_ROOT);
-#endif
+AsyncTelegram2 myBot(client);
+//const char* ssid  =  "milton";     // SSID WiFi network
+//const char* pass  =  "paternal";     // Password  WiFi network
+String ssid = "milton";
+String password = "paternal";
+//String ssid = "wifi01-ei";
+//String password = "Ax32MnF1975-ReB";
 
-WiFiClientSecure client;
-UniversalTelegramBot bot(BOTtoken, client);
+const char* token =  "5021419842:AAGWdRxVtpBNxiWtD3oEDN_CIkK1LnuqefE";  // Telegram token
 
-// Checks for new messages every 1 second.
-int botRequestDelay = 1000;
-unsigned long lastTimeBotRan;
-
-const int ledPin = 2;
 bool ledState = LOW;
 
 //************CONFIGURACIÓN DE TELEGRAM*****************
 
-#define LED_ONBOARD 2
+
 
 // define the number of bytes you want to access
 #define EEPROM_SIZE 300
@@ -159,8 +164,8 @@ char handtempKeepAlive_topic_publish[100] = "INTI/Electronica/esp32/keepAlive/se
 //*********** GLOBALES   ***************
 //**************************************
 
- WiFiClient espClient1;
- PubSubClient client1(espClient1);
+WiFiClient espClient1;
+PubSubClient client1(espClient1);
 
 long count=0;
 hw_timer_t * timer3;
@@ -198,8 +203,6 @@ uint8_t flagModoAP = 0;
 int lecturaSwitchMODO = 0;
 String savedSSID = {};
 String savedPASS = {};
-String ssid = {};
-String password = {};
 char flagOTA = 0;
 String ssidOTA = {};
 String passwordOTA = {};
@@ -275,7 +278,7 @@ BluetoothSerial SerialBT;
 
 // // DISPLAY
 // void showAllDataDebugMode(double tempC, double tempAmbC, float dist);
-// void cambioDeParametros(void);
+void cambioDeParametros(void);
 // //void grabarEmisividadEnSensorIR(void);
 // void publicarDataAmbiente(double, char[]);
 // void publicarDataObjeto(double, double, double, char[]);
@@ -285,20 +288,21 @@ BluetoothSerial SerialBT;
 // void encenderNeopixel(char);
 // void apagarNeopixel(void);
 void publicarKeepAlive(void);
-// void cambiarConfigMQTT(uint8_t);
+void cambiarConfigMQTT(uint8_t);
 void comprobarConexion(void);
 // void probarNeopixel(void);
  void setupModoRed(void);
 // void fallaConexion(void);
 // void displayText(char);
-// void switchCaseParametros(char, String);
+void switchCaseParametros(char, String);
 // void modoAccessPoint(void);
 // void imprimirModo(void);
 // void handTempText(void);
 void recvMsg(uint8_t *, size_t);
 void setup_mqtt(void);
 void handleNewMessages(int);
-
+void chequearTelegram(void);
+void setup_telegram(void);
 //timer de usos generales 1000ms
 void IRAM_ATTR onTimer3() {
 
@@ -306,15 +310,15 @@ void IRAM_ATTR onTimer3() {
     contadorProceso2++;
 	  contadorProceso3++;
 
-    if(contadorProceso1 == tiempo1/6){//proceso 1
-        contadorProceso1 = 0;//resetea el contador
-        flagProceso1 = 1;
-    }
+  if(contadorProceso1 == tiempo1/60){//proceso 1
+      contadorProceso1 = 0;//resetea el contador
+      flagProceso1 = 1;
+  }
 	if(contadorProceso2 == tiempo1){//proceso 2
         contadorProceso2 = 0;//resetea el contador
         flagProceso2 = 1;
     }
-    if(contadorProceso3 == tiempo1 * 10){//proceso 3 (cada 10 min)
+    if(contadorProceso3 == tiempo1 * 2){//proceso 3 (cada 2 min)
         contadorProceso3 = 0;//resetea el contador
         flagProceso3 = 1;//para chequear conexión con red wifi y broker
     }
@@ -336,28 +340,17 @@ void setup() {
     
     Serial.begin(115200);
         
-
-
     SerialBT.begin("INTI-ESP32 Bluetooth"); //Bluetooth device name
 
     macAdd = WiFi.macAddress();
     Serial.println( "MAC address: " + macAdd );
 
-    ssid = "wifi01-ei";
-    password = "Ax32MnF1975-ReB";
-    //ssid = "milton";
-    //password = "paternal";
+
 
 	  client1.subscribe(root_topic_subscribe);
 
-	#ifdef ESP8266
-    	configTime(0, 0, "pool.ntp.org");      // get UTC time via NTP
-    	client.setTrustAnchors(&cert); // Add root certificate for api.telegram.org
-  	#endif
-
-	randomSeed(analogRead(27));
-    
-
+	  randomSeed(analogRead(27));
+   
     timer3 = timerBegin(2, 80, true);
     timerAttachInterrupt(timer3, &onTimer3, true);
     timerAlarmWrite(timer3, 1000000, true);//valor en microsegundos [1 s]
@@ -367,8 +360,6 @@ void setup() {
     esp_task_wdt_add(NULL); //add current thread to WDT watch
 
     pinMode(LED_ONBOARD, OUTPUT);
-	pinMode(ledPin, OUTPUT);
-  	digitalWrite(ledPin, ledState);
 
  
     //digitalWrite(buzzPin, HIGH);
@@ -389,7 +380,6 @@ void setup() {
     //probarNeopixel();
   
     setupModoRed();//configura MQTT, revisa conectividad
-	//setup_wifi();
 
     //imprimirModo();//informa por display Modo local o Modo Red
 /*
@@ -397,8 +387,11 @@ void setup() {
     WebSerial.msgCallback(recvMsg);
     server.begin();
 */
+    setup_telegram();// Set the Telegram bot properies
+  
     
-    
+      
+      
 }
 
 
@@ -409,61 +402,27 @@ void setup() {
 
 void loop() {
 
-	//Chequea cada cierto tiempo mensajes enviados por Telegram
-/*
-	if(flagProceso1 == 1){
-		flagProceso1 = 0;
-		int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
-		Serial.println("numNewMessages: " + numNewMessages);	
-		while(numNewMessages) {
-      		Serial.println("got response");
-      		handleNewMessages(numNewMessages);
-      		numNewMessages = bot.getUpdates(bot.last_message_received + 1);
-    	}
-	}
-*/	
-/*
-	if (millis() > lastTimeBotRan + botRequestDelay)  {
-		int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
-		Serial.print("mensajes: ");
-		Serial.println(numNewMessages);
-		while(numNewMessages) {
-		Serial.println("got response");
-		handleNewMessages(numNewMessages);
-		numNewMessages = bot.getUpdates(bot.last_message_received + 1);
-		}
+  //Chequea cada cierto tiempo mensajes enviados por Telegram
+  chequearTelegram();
 
-		lastTimeBotRan = millis();
-  	}
-   */
 	long numero = 0;
 
-    //cambioDeParametros();
+  cambioDeParametros();
 
-    client1.loop();
+  client1.loop();
     
 
     if(flagProceso1 == 1){//publica cada cierto tiempo un número aleatorio en formato json
       flagProceso1 = 0;
       numero = random(1,50);
-	  Serial.println(numero);
+	    Serial.println(numero);
       //publicarData(numero);
 	  
 	  
-	  	int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
-		Serial.print("numNewMessages: ");
-		Serial.println(numNewMessages);
-		
-		while(numNewMessages) {
-			Serial.println("got response");
-			handleNewMessages(numNewMessages);
-			numNewMessages = bot.getUpdates(bot.last_message_received + 1);
-		}
-		
-		//WebSerial.println("Hello!");
+	  	//WebSerial.println("Hello!");
 	
     }
-/*
+
     //Keep Alive
     //Si pasó cierto tiempo y la conexión está OK
     if(flagProceso2 == 1 && flagConexionOK == 1){
@@ -479,36 +438,31 @@ void loop() {
       }
    
     }
-*/
+
     //alimentar watchDog
     esp_task_wdt_reset();
 
-  /*  
-
-    
-
     //cada cierto tiempo chequea la conexión MQTT solo si la perdió
-
     if(flagProceso3 && flagConexionOK == 0){
 
       flagProceso3 = 0;
-      displayText('R');
+      //displayText('R');
       Serial.println("Intentando recuperar la conexión");
       comprobarConexion();//si alguna conexión se perdió, la reestablece
       if(flagConexionOK){//si la recuperó
         Serial.print("Se ha recuperado la conexión. flagConexionOK = ");
         Serial.println(flagConexionOK);
-        displayText('1');
+        //displayText('1');
         contadorReconexionExitosa++;
       }else{//si no la recuperó
         
         Serial.print("[PROBLEMAS] No se ha recuperado la conexión. flagConexionOK = ");
         Serial.println(flagConexionOK);
-        displayText('0');
+        //displayText('0');
         contadorReconexionFallida++;
       }
     }
-   */
+  
     
 }
 
@@ -581,7 +535,7 @@ void setup_wifi(){
         Serial.println(WiFi.localIP());
         delay(5000);
 		#ifdef ESP32
-			client.setCACert(TELEGRAM_CERTIFICATE_ROOT); // Add root certificate for api.telegram.org
+			//client.setCACert(TELEGRAM_CERTIFICATE_ROOT); // Add root certificate for api.telegram.org
 		#endif	 
 
       }
@@ -962,83 +916,83 @@ void callback(char* topic, byte* payload, unsigned int length){
   
 // }
 
-// //puede cambiar parámetros a través del puerto serie o por bluetooth
-// //Se debe enviar un caracter de identificación del parámetro a cambiar y
-// //luego el valor.
-// //Por ejemplo: cambiar el tiempo entre lecturas de temperatura
-// //enviar T100  siendo T: tiempoEntreLecturas; 100: 100 ms
-// //los parámetros que se pueden modificar son:
-// //  distanciaConfigurada--> D;
-// //  distanciaTolerancia--> t;
-// //  tempFiebre--> F;
-// //  tempMin--> m;
-// //  tempMax--> M;
-// //  tempOffset--> O;
-// //  tiempoEntreLecturas--> T;
-// //  cantLecturas--> C;
-// //  emisividad--> E;
-// //  Wifi--> W;  [Ejemplo: Wmyssid mypassword](El espacio se usa como delimitador)
-// //  debug--> d  [1 para activarlo; 0 para desactivarlo]
-// //  cantSensoresIR-->S
-// //  consultarLecturas-->P
-// //  escannearDispositivosI2C-->s  [1 para activarlo; 0 para desactivarlo]
-// //  cambiarDireccionI2C-->A       [A90 91]
-// //  analizarLecturasCantidad-->U
-// //  intercambiarSensores-->I;
-// //  consultarContadorReconexion--X; 
-// void cambioDeParametros(void){
+//puede cambiar parámetros a través del puerto serie o por bluetooth
+//Se debe enviar un caracter de identificación del parámetro a cambiar y
+//luego el valor.
+//Por ejemplo: cambiar el tiempo entre lecturas de temperatura
+//enviar T100  siendo T: tiempoEntreLecturas; 100: 100 ms
+//los parámetros que se pueden modificar son:
+//  distanciaConfigurada--> D;
+//  distanciaTolerancia--> t;
+//  tempFiebre--> F;
+//  tempMin--> m;
+//  tempMax--> M;
+//  tempOffset--> O;
+//  tiempoEntreLecturas--> T;
+//  cantLecturas--> C;
+//  emisividad--> E;
+//  Wifi--> W;  [Ejemplo: Wmyssid mypassword](El espacio se usa como delimitador)
+//  debug--> d  [1 para activarlo; 0 para desactivarlo]
+//  cantSensoresIR-->S
+//  consultarLecturas-->P
+//  escannearDispositivosI2C-->s  [1 para activarlo; 0 para desactivarlo]
+//  cambiarDireccionI2C-->A       [A90 91]
+//  analizarLecturasCantidad-->U
+//  intercambiarSensores-->I;
+//  consultarContadorReconexion--X; 
+void cambioDeParametros(void){
 
-//   char charParamID = ' ';
-//   String valorParam = "";
-//   int inChar = 0;
-//   String inString = "";
+  char charParamID = ' ';
+  String valorParam = "";
+  int inChar = 0;
+  String inString = "";
     
   
-//   //**** Chequeo por Serie o Bluetooth ***************
-//   while (Serial.available() > 0 || SerialBT.available() > 0) {
+  //**** Chequeo por Serie o Bluetooth ***************
+  while (Serial.available() > 0 || SerialBT.available() > 0) {
 
-//     if(Serial.available() > 0){
-//       inChar = Serial.read();
-//     }else if(SerialBT.available() > 0){
-//       inChar = SerialBT.read();
-//     }
+    if(Serial.available() > 0){
+      inChar = Serial.read();
+    }else if(SerialBT.available() > 0){
+      inChar = SerialBT.read();
+    }
     
 
-//     if(inChar != '\n'){
-//       Serial.print((char)inChar);
+    if(inChar != '\n'){
+      Serial.print((char)inChar);
 
-//       inString += (char)inChar;//encola los caracteres recibidos
+      inString += (char)inChar;//encola los caracteres recibidos
 
-//     }else{//si llegó el caracter de terminación
+    }else{//si llegó el caracter de terminación
       
-//       Serial.print("Input string: ");
-//       Serial.println(inString);
-//       Serial.print("string length: ");
-//       Serial.println(inString.length());
+      Serial.print("Input string: ");
+      Serial.println(inString);
+      Serial.print("string length: ");
+      Serial.println(inString.length());
 
 
-//       //obtiene el identificador
-//       charParamID = inString.charAt(0);
+      //obtiene el identificador
+      charParamID = inString.charAt(0);
       
-//       Serial.println(charParamID);
+      Serial.println(charParamID);
       
-//       //obtiene el valor
-//       for(int i = 1; i < inString.length(); i++){
-//         valorParam += inString.charAt(i);
-//       }
+      //obtiene el valor
+      for(int i = 1; i < inString.length(); i++){
+        valorParam += inString.charAt(i);
+      }
 
-//       Serial.println(valorParam);
+      Serial.println(valorParam);
 
-//       //evalua el identificador y los parámetros enviados
-//       switchCaseParametros(charParamID, valorParam);
+      //evalua el identificador y los parámetros enviados
+      switchCaseParametros(charParamID, valorParam);
       
-//       //borra el contenido y lo prepara para recibir uno nuevo
-//       inString = "";
+      //borra el contenido y lo prepara para recibir uno nuevo
+      inString = "";
     
-//     }
-//   }
+    }
+  }
 
-// }
+}
 
 // //realiza la lectura del timestamp desde el server ntp
 // void obtenerFechaHora(void){
@@ -1239,439 +1193,440 @@ void publicarKeepAlive(void){
 
 }
 
-// void cambiarConfigMQTT(uint8_t numSensor){
+void cambiarConfigMQTT(uint8_t numSensor){
  
-//   char strNombreSensor[80] = "";
-//   char numMacAdd[80] = {}; 
-//   char strTopico[80] = "INTI-ESP32/";
-//   char str[10] = {};
-//   char str2[80] = {};
-//   char strBroker[80] = {};
+  char strNombreSensor[80] = "";
+  char numMacAdd[80] = {}; 
+  char strTopico[80] = "INTI-ESP32/";
+  char str[10] = {};
+  char str2[80] = {};
+  char strBroker[80] = {};
 
 
-//   strcat(numMacAdd, macAdd.c_str());
-//   //sprintf(str, "%d", numSensor);
-//   strcat(strNombreSensor, numMacAdd);
-//   //strcat(strNombreSensor, str);
-//   Serial.print("strNombreSensor: ");
-//   Serial.println(strNombreSensor);
+  strcat(numMacAdd, macAdd.c_str());
+  //sprintf(str, "%d", numSensor);
+  strcat(strNombreSensor, numMacAdd);
+  //strcat(strNombreSensor, str);
+  Serial.print("strNombreSensor: ");
+  Serial.println(strNombreSensor);
 
-//   strcat(strTopico, strNombreSensor);
-//   Serial.print("strTopico: ");
-//   Serial.println(strTopico);
+  strcat(strTopico, strNombreSensor);
+  Serial.print("strTopico: ");
+  Serial.println(strTopico);
 
   
-//   strcpy(root_topic_subscribe, strTopico);
-//   strcpy(root_topic_publish, strTopico);
-//   strcpy(tempAmbiente_topic_publish, strTopico);
-//   strcpy(tempObjeto_topic_publish, strTopico);
-//   strcpy(handtempKeepAlive_topic_publish, strTopico);
-//   strcat(strBroker, broker.c_str());
-//   strcpy(mqtt_server, strBroker);
+  strcpy(root_topic_subscribe, strTopico);
+  strcpy(root_topic_publish, strTopico);
+  strcpy(tempAmbiente_topic_publish, strTopico);
+  strcpy(tempObjeto_topic_publish, strTopico);
+  strcpy(handtempKeepAlive_topic_publish, strTopico);
+  strcat(strBroker, broker.c_str());
+  strcpy(mqtt_server, strBroker);
 
-// }
+}
 
-// //si perdió la conexión, intenta recuperarla
-// void comprobarConexion(void){
+//si perdió la conexión, intenta recuperarla
+void comprobarConexion(void){
 
-//   setupModoRed();//configura MQTT, revisa conectividad
-//   /*
-//   if(!client1.connected()){
-//     reconnect();
-//   }
-//   */
-//   /*
-//   if(!client2.connected()){
-//     reconnect();
-//   }
-//   */
+  setupModoRed();//configura MQTT, revisa conectividad
+  /*
+  if(!client1.connected()){
+    reconnect();
+  }
+  */
+  /*
+  if(!client2.connected()){
+    reconnect();
+  }
+  */
 
-// }
+}
 
 
-// void switchCaseParametros(char charParamID, String valorParam){
+void switchCaseParametros(char charParamID, String valorParam){
 
-//   int inChar = 0;
-//   int index = 0;
-//   int valorParamLength = 0;
-//   int endIndex = 0;
-//   int modoDebug = 0;
-//   int consultarLecturas = 0;
-//   int correccionActivada = 0;
-//   uint8_t numSensor = 0;
-//   uint16_t direccion = 0;
-//   int scanActivado = 0;
-//   byte oldAddress = 0;
-//   byte newAddress = 0;
-//   int analizarLecturasCantidad = 0;
-//   int intercambioSensores = 0;
-//   int color = 0;
-//   String nombreSensor = "";
+  int inChar = 0;
+  int index = 0;
+  int valorParamLength = 0;
+  int endIndex = 0;
+  int modoDebug = 0;
+  int consultarLecturas = 0;
+  int correccionActivada = 0;
+  uint8_t numSensor = 0;
+  uint16_t direccion = 0;
+  int scanActivado = 0;
+  byte oldAddress = 0;
+  byte newAddress = 0;
+  int analizarLecturasCantidad = 0;
+  int intercambioSensores = 0;
+  int color = 0;
+  String nombreSensor = "";
   
-//   //valorParam = 
-//   valorParam.replace(0x0A,'\0');//Se filtra el caracter LF
-//   valorParam.replace(0x0D,'\0');//Se filtra el caracter CR
+  //valorParam = 
+  valorParam.replace(0x0A,'\0');//Se filtra el caracter LF
+  valorParam.replace(0x0D,'\0');//Se filtra el caracter CR
 
-//   switch(charParamID){
-//     case 'D':
-// 	/*
-//       distanciaConfigurada = valorParam.toFloat();
-//       Serial.print("DistanciaConfigurada: ");
-//       Serial.println(distanciaConfigurada);
-// 	  */
-//     break;
-//     case 't':
-// 	/*
-//       distanciaTolerancia = valorParam.toFloat();
-//       Serial.print("DistanciaTolerancia: ");
-//       Serial.println(distanciaTolerancia);
-// 	  */
-//     break;
-//     case 'O':
-//       tempOffset = valorParam.toDouble();
-//       Serial.print("TempOffset: ");
-//       Serial.println(tempOffset);
+  switch(charParamID){
+    case 'D':
+	/*
+      distanciaConfigurada = valorParam.toFloat();
+      Serial.print("DistanciaConfigurada: ");
+      Serial.println(distanciaConfigurada);
+	  */
+    break;
+    case 't':
+	/*
+      distanciaTolerancia = valorParam.toFloat();
+      Serial.print("DistanciaTolerancia: ");
+      Serial.println(distanciaTolerancia);
+	  */
+    break;
+    case 'O':
+    /*
+      tempOffset = valorParam.toDouble();
+      Serial.print("TempOffset: ");
+      Serial.println(tempOffset);
 
-//       //guarda en EEPROM el OFFSET de temperatura
-//       //tempOffsetEEPROM = (uint8_t)(tempOffset * 10);
-//       tempOffsetEEPROM = tempOffset;
-//       EEPROM.writeDouble(0, tempOffsetEEPROM);
-//       EEPROM.commit();
+      //guarda en EEPROM el OFFSET de temperatura
+      //tempOffsetEEPROM = (uint8_t)(tempOffset * 10);
+      tempOffsetEEPROM = tempOffset;
+      EEPROM.writeDouble(0, tempOffsetEEPROM);
+      EEPROM.commit();
+*/
+    break;
+    case 'T':
+      /*
+	  tiempoEntreLecturas = valorParam.toInt();
+      Serial.print("TiempoEntreLecturas: ");
+      Serial.println(tiempoEntreLecturas);
+	  */
+    break;
+    case 'm':
+	/*
+      tempMin = valorParam.toDouble();
+      Serial.print("tempMin: ");
+      Serial.println(tempMin);
+	  */
+    break;
+    case 'M':
+	/*
+      tempMax = valorParam.toDouble();
+      Serial.print("tempMax: ");
+      Serial.println(tempMax);
+	  */
+    break;
+    case 'F':
+	/*
+      tempFiebre = valorParam.toDouble();
+      Serial.print("tempFiebre: ");
+      Serial.println(tempFiebre);
+	  */
+    break;
+    case 'E':
+	/*
+      emisividadPorSerie = valorParam.toFloat();
+      emisividad = (uint16_t)(emisividadPorSerie * 65535);
 
-//     break;
-//     case 'T':
-//       /*
-// 	  tiempoEntreLecturas = valorParam.toInt();
-//       Serial.print("TiempoEntreLecturas: ");
-//       Serial.println(tiempoEntreLecturas);
-// 	  */
-//     break;
-//     case 'm':
-// 	/*
-//       tempMin = valorParam.toDouble();
-//       Serial.print("tempMin: ");
-//       Serial.println(tempMin);
-// 	  */
-//     break;
-//     case 'M':
-// 	/*
-//       tempMax = valorParam.toDouble();
-//       Serial.print("tempMax: ");
-//       Serial.println(tempMax);
-// 	  */
-//     break;
-//     case 'F':
-// 	/*
-//       tempFiebre = valorParam.toDouble();
-//       Serial.print("tempFiebre: ");
-//       Serial.println(tempFiebre);
-// 	  */
-//     break;
-//     case 'E':
-// 	/*
-//       emisividadPorSerie = valorParam.toFloat();
-//       emisividad = (uint16_t)(emisividadPorSerie * 65535);
+      Serial.println(emisividadPorSerie);
+      Serial.println(emisividad);
 
-//       Serial.println(emisividadPorSerie);
-//       Serial.println(emisividad);
+      mlx1.writeEmissivityReg(emisividad);//escribe la emisividad al sensor
+      mlx1.begin();
 
-//       mlx1.writeEmissivityReg(emisividad);//escribe la emisividad al sensor
-//       mlx1.begin();
-
-//       delay(500);
+      delay(500);
       
-//       //Verificación de emisividad
-//       Serial.println("Reconecte el sensor");
-//       Serial.println("10...");
-//       delay(1000);
-//       Serial.println("9...");
-//       delay(1000);
-//       Serial.println("8...");
-//       delay(1000);
-//       Serial.println("7...");
-//       delay(1000);
-//       Serial.println("6...");
-//       delay(1000);
-//       Serial.println("5...");
-//       delay(1000);
-//       Serial.println("4...");
-//       delay(1000);
-//       Serial.println("3...");
-//       delay(1000);
-//       Serial.println("2...");
-//       delay(1000);
-//       Serial.println("1...");
-//       delay(1000);
-//       Serial.println("Se leerá la emisividad");
-//       delay(3000);
+      //Verificación de emisividad
+      Serial.println("Reconecte el sensor");
+      Serial.println("10...");
+      delay(1000);
+      Serial.println("9...");
+      delay(1000);
+      Serial.println("8...");
+      delay(1000);
+      Serial.println("7...");
+      delay(1000);
+      Serial.println("6...");
+      delay(1000);
+      Serial.println("5...");
+      delay(1000);
+      Serial.println("4...");
+      delay(1000);
+      Serial.println("3...");
+      delay(1000);
+      Serial.println("2...");
+      delay(1000);
+      Serial.println("1...");
+      delay(1000);
+      Serial.println("Se leerá la emisividad");
+      delay(3000);
 
-//       Serial.print("Emisividad sensor 1: ");
-//       Serial.println(mlx1.readEmissivity());
-// */
-//     break;
-//     case 'W':
+      Serial.print("Emisividad sensor 1: ");
+      Serial.println(mlx1.readEmissivity());
+*/
+    break;
+    case 'W':
+/*
+      Serial.println("Wifi: ");
+      valorParamLength = strlen(valorParam.c_str());
+      endIndex = valorParamLength;
 
-//       Serial.println("Wifi: ");
-//       valorParamLength = strlen(valorParam.c_str());
-//       endIndex = valorParamLength;
+      index = valorParam.indexOf(' ');
 
-//       index = valorParam.indexOf(' ');
+      ssid = valorParam.substring(0, index);
+      Serial.println(ssid);
+      //password = valorParam.substring(index + 1, endIndex - 1);
+      password = valorParam.substring(index + 1, endIndex);
+      Serial.println(password);
 
-//       ssid = valorParam.substring(0, index);
-//       Serial.println(ssid);
-//       //password = valorParam.substring(index + 1, endIndex - 1);
-//       password = valorParam.substring(index + 1, endIndex);
-//       Serial.println(password);
+      //guarda config wifi en EEPROM
+      EEPROM.writeString(EEPROM_ADDRESS_WIFI_SSID, ssid);
+      EEPROM.commit();
+      EEPROM.writeString(EEPROM_ADDRESS_WIFI_PASS, password);
+      EEPROM.commit();
 
-//       //guarda config wifi en EEPROM
-//       EEPROM.writeString(EEPROM_ADDRESS_WIFI_SSID, ssid);
-//       EEPROM.commit();
-//       EEPROM.writeString(EEPROM_ADDRESS_WIFI_PASS, password);
-//       EEPROM.commit();
+      setup_wifi();
+*/
+    break;
+    case 'Q':
+/*
+      numSensor = valorParam.toInt();
+      Serial.println("MQTT (numSensor): ");
+      Serial.println(numSensor);
 
-//       setup_wifi();
+      if(numSensor >= 0 && numSensor <= 255){
 
-//     break;
-//     case 'Q':
+        cambiarConfigMQTT(numSensor);
 
-//       numSensor = valorParam.toInt();
-//       Serial.println("MQTT (numSensor): ");
-//       Serial.println(numSensor);
+        //guarda en EEPROM el número de sensor
+        EEPROM.write(0 + sizeof(double), numSensor);
+        EEPROM.commit();
 
-//       if(numSensor >= 0 && numSensor <= 255){
+      }else{
 
-//         cambiarConfigMQTT(numSensor);
+        Serial.println("Número incorrecto. Se acepta entre 0 y 255");
 
-//         //guarda en EEPROM el número de sensor
-//         EEPROM.write(0 + sizeof(double), numSensor);
-//         EEPROM.commit();
-
-//       }else{
-
-//         Serial.println("Número incorrecto. Se acepta entre 0 y 255");
-
-//       }
-
-//     break;
-//     case 'C':
-// 	/*
-//       cantLecturas = valorParam.toInt();
-//       Serial.print("cantLecturas: ");
-//       Serial.println(cantLecturas);
-// 	  */
-//     break;
-//     case 'd':
-//       modoDebug = valorParam.toInt();//1 para activarlo; 0 para desactivarlo
-//       Serial.print("modoDebug: ");
-//       Serial.println(modoDebug);
-//       if(modoDebug){
-//         flagModoDebug = 1;
-//       }else{
-//         flagModoDebug = 0;
-//       }
+      }
+*/
+    break;
+    case 'C':
+	/*
+      cantLecturas = valorParam.toInt();
+      Serial.print("cantLecturas: ");
+      Serial.println(cantLecturas);
+	  */
+    break;
+    case 'd':
+      modoDebug = valorParam.toInt();//1 para activarlo; 0 para desactivarlo
+      Serial.print("modoDebug: ");
+      Serial.println(modoDebug);
+      if(modoDebug){
+        flagModoDebug = 1;
+      }else{
+        flagModoDebug = 0;
+      }
       
-//     break;
-//     case 'S':
-// 	/*
-//       cantSensoresIR = valorParam.toInt();
+    break;
+    case 'S':
+	/*
+      cantSensoresIR = valorParam.toInt();
 
-//       if(cantSensoresIR < 1 && cantSensoresIR > 3){//valida la cantidad declarada
-//         Serial.println("cantidad de sensoresIR incorrecta. Se configura a 1");
-//         cantSensoresIR = 1;
-//       }
+      if(cantSensoresIR < 1 && cantSensoresIR > 3){//valida la cantidad declarada
+        Serial.println("cantidad de sensoresIR incorrecta. Se configura a 1");
+        cantSensoresIR = 1;
+      }
 
-//       Serial.print("cantSensoresIR: ");
-//       Serial.println(cantSensoresIR);
-//       flagLecturaEmisividad = 1;//habilita para volver a leer la emisividad
-// */
-//     break;
-//     case 'P':
-//       //imprimir por pantalla todos los valores adquiridos
-//       consultarLecturas = valorParam.toInt();//1 para activarlo; 0 para desactivarlo
-//       Serial.print("consultarLecturas: ");
-//       Serial.println(consultarLecturas);
-//       Serial.print("Índice: ");
-//       Serial.println(idx2);
-//       if(consultarLecturas == 1){
-//         flagUltimasLecturas = 1;
-//       }else{
-//         flagUltimasLecturas = 0;
-//       }
+      Serial.print("cantSensoresIR: ");
+      Serial.println(cantSensoresIR);
+      flagLecturaEmisividad = 1;//habilita para volver a leer la emisividad
+*/
+    break;
+    case 'P':
+      //imprimir por pantalla todos los valores adquiridos
+      consultarLecturas = valorParam.toInt();//1 para activarlo; 0 para desactivarlo
+      Serial.print("consultarLecturas: ");
+      Serial.println(consultarLecturas);
+      Serial.print("Índice: ");
+      Serial.println(idx2);
+      if(consultarLecturas == 1){
+        flagUltimasLecturas = 1;
+      }else{
+        flagUltimasLecturas = 0;
+      }
 
-//     break;
-//     case 'c':
-// 	/*
-//       correccionActivada = valorParam.toInt();//1 para activarlo; 0 para desactivarlo
-//       Serial.print("correccionActivada: ");
-//       Serial.println(correccionActivada);
-//       if(correccionActivada){
-//         flagCorreccion = 1;
-//       }else{
-//         flagCorreccion = 0;
-//       }
-// */
-//     break;
-//     case 'A':
+    break;
+    case 'c':
+	/*
+      correccionActivada = valorParam.toInt();//1 para activarlo; 0 para desactivarlo
+      Serial.print("correccionActivada: ");
+      Serial.println(correccionActivada);
+      if(correccionActivada){
+        flagCorreccion = 1;
+      }else{
+        flagCorreccion = 0;
+      }
+*/
+    break;
+    case 'A':
       
-//       valorParamLength = strlen(valorParam.c_str());
-//       endIndex = valorParamLength;
+      valorParamLength = strlen(valorParam.c_str());
+      endIndex = valorParamLength;
 
-//       index = valorParam.indexOf(' ');
+      index = valorParam.indexOf(' ');
 
-//       oldAddress = (byte)valorParam.substring(0, index).toInt();
+      oldAddress = (byte)valorParam.substring(0, index).toInt();
                 
-//       Serial.println("OldAddress: ");
-//       Serial.println(oldAddress, HEX);
-//       newAddress = (byte)valorParam.substring(index + 1, endIndex - 1).toInt();
-//       Serial.println("NewAddress: ");
-//       Serial.println(newAddress, HEX);
+      Serial.println("OldAddress: ");
+      Serial.println(oldAddress, HEX);
+      newAddress = (byte)valorParam.substring(index + 1, endIndex - 1).toInt();
+      Serial.println("NewAddress: ");
+      Serial.println(newAddress, HEX);
 
-//       //cambiarDireccionI2CNuevaVersion(oldAddress, newAddress);
+      //cambiarDireccionI2CNuevaVersion(oldAddress, newAddress);
 
-//     break;
-//     case 's':
-// 	/*
-//       scanActivado = valorParam.toInt();//1 para activarlo; 0 para desactivarlo
-//       Serial.print("scanActivado: ");
-//       Serial.println(scanActivado);
-//       if(scanActivado){
-//         flagScan = 1;
-//       }else{
-//         flagScan = 0;
-//       }
-// 	  */
-//     break;
-//     case 'U':
-//       analizarLecturasCantidad = valorParam.toInt();
-//       Serial.print("AnalizarLecturasCantidad: ");
-//       Serial.println(analizarLecturasCantidad);
-//       if(analizarLecturasCantidad > 0 && analizarLecturasCantidad <= 10){
+    break;
+    case 's':
+	/*
+      scanActivado = valorParam.toInt();//1 para activarlo; 0 para desactivarlo
+      Serial.print("scanActivado: ");
+      Serial.println(scanActivado);
+      if(scanActivado){
+        flagScan = 1;
+      }else{
+        flagScan = 0;
+      }
+	  */
+    break;
+    case 'U':
+      analizarLecturasCantidad = valorParam.toInt();
+      Serial.print("AnalizarLecturasCantidad: ");
+      Serial.println(analizarLecturasCantidad);
+      if(analizarLecturasCantidad > 0 && analizarLecturasCantidad <= 10){
 
-//           //analizarLecturas(analizarLecturasCantidad);
+          //analizarLecturas(analizarLecturasCantidad);
 
-//       }else{
-//         Serial.println("Valor incorrecto");
-//       }
-//     break;
-//     case 'I':
-//       intercambioSensores = valorParam.toInt();
-//       Serial.print("intercambioSensores: ");
-//       Serial.println(intercambioSensores);
+      }else{
+        Serial.println("Valor incorrecto");
+      }
+    break;
+    case 'I':
+      intercambioSensores = valorParam.toInt();
+      Serial.print("intercambioSensores: ");
+      Serial.println(intercambioSensores);
 
-//       //intercambiarSensores();
-//     break;
-//     case 'R':
-//       color = valorParam.toInt();
-//       Serial.print("red: ");
-//       Serial.println(color);
-//       Red = color;
-//     break;
-//     case 'G':
-//       color = valorParam.toInt();
-//       Serial.print("green: ");
-//       Serial.println(color);
-//       Green = color;
-//     break;
-//     case 'B':
-//       color = valorParam.toInt();
-//       Serial.print("blue: ");
-//       Serial.println(color);
-//       Blue = color;
-//     break;
-//     case 'K':
+      //intercambiarSensores();
+    break;
+    case 'R':
+      color = valorParam.toInt();
+      Serial.print("red: ");
+      Serial.println(color);
+      Red = color;
+    break;
+    case 'G':
+      color = valorParam.toInt();
+      Serial.print("green: ");
+      Serial.println(color);
+      Green = color;
+    break;
+    case 'B':
+      color = valorParam.toInt();
+      Serial.print("blue: ");
+      Serial.println(color);
+      Blue = color;
+    break;
+    case 'K':
 
-//       //valorParamLength = strlen(valorParam.c_str());
-//       //endIndex = valorParamLength;
+      //valorParamLength = strlen(valorParam.c_str());
+      //endIndex = valorParamLength;
 
-//       //index = valorParam.indexOf(' ');
+      //index = valorParam.indexOf(' ');
 
-//       broker = valorParam;
-//       Serial.println("MQTT (broker): ");
-//       Serial.println(broker);
-//       Serial.println(strlen(valorParam.c_str()));
+      broker = valorParam;
+      Serial.println("MQTT (broker): ");
+      Serial.println(broker);
+      Serial.println(strlen(valorParam.c_str()));
 
-//       //Serial.println(ssid);
-//       //password = valorParam.substring(index + 1, endIndex - 1);
-//       //Serial.println(password);
+      //Serial.println(ssid);
+      //password = valorParam.substring(index + 1, endIndex - 1);
+      //Serial.println(password);
 
-//       //guarda config mqtt_server en EEPROM
-//       //EEPROM.writeString(EEPROM_ADDRESS_MQTT_SERVER, broker);
-//       //EEPROM.commit();
-//       //EEPROM.writeString(EEPROM_ADDRESS_WIFI_PASS, password);
-//       //EEPROM.commit();
-//       cambiarConfigMQTT(1);
-//     break;
-//     case 'o':
+      //guarda config mqtt_server en EEPROM
+      //EEPROM.writeString(EEPROM_ADDRESS_MQTT_SERVER, broker);
+      //EEPROM.commit();
+      //EEPROM.writeString(EEPROM_ADDRESS_WIFI_PASS, password);
+      //EEPROM.commit();
+      cambiarConfigMQTT(1);
+    break;
+    case 'o':
 
-//       //valorParamLength = strlen(valorParam.c_str());
-//       //endIndex = valorParamLength;
+      //valorParamLength = strlen(valorParam.c_str());
+      //endIndex = valorParamLength;
 
 
 
-//       //index = valorParam.indexOf(' ');
-//       flagOTA = valorParam.toInt();//1 para activarlo; 0 para desactivarlo
-//       Serial.print("flagOTA: ");
-//       Serial.println(flagOTA);
-// /*      
-//       if(flagOTA == 1){
-//         EEPROM.write(EEPROM_ADDRESS_FLAG_OTA, flagOTA);
-//         EEPROM.commit();
-//       }else if(flagOTA == 0){
-//         EEPROM.write(EEPROM_ADDRESS_FLAG_OTA, flagOTA);
-//         EEPROM.commit();
-//       }
-//       Serial.println("Se reiniciará el sistema");
-//       delay(5000);
-//       ESP.restart();
-// */
-//     break;
-//     case 'r':
-//       Serial.print("Reset...");
-//       delay(3000);
-//       ESP.restart();
+      //index = valorParam.indexOf(' ');
+      flagOTA = valorParam.toInt();//1 para activarlo; 0 para desactivarlo
+      Serial.print("flagOTA: ");
+      Serial.println(flagOTA);
+/*      
+      if(flagOTA == 1){
+        EEPROM.write(EEPROM_ADDRESS_FLAG_OTA, flagOTA);
+        EEPROM.commit();
+      }else if(flagOTA == 0){
+        EEPROM.write(EEPROM_ADDRESS_FLAG_OTA, flagOTA);
+        EEPROM.commit();
+      }
+      Serial.println("Se reiniciará el sistema");
+      delay(5000);
+      ESP.restart();
+*/
+    break;
+    case 'r':
+      Serial.print("Reset...");
+      delay(3000);
+      ESP.restart();
       
-//     break;
+    break;
 
-//     case 'X':
+    case 'X':
       
-//       Serial.print("contadorReconexionExitosa: ");
-//       Serial.println(contadorReconexionExitosa);
+      Serial.print("contadorReconexionExitosa: ");
+      Serial.println(contadorReconexionExitosa);
 
-//       SerialBT.print("contadorReconexionExitosa: ");
-//       SerialBT.println(contadorReconexionExitosa);
+      SerialBT.print("contadorReconexionExitosa: ");
+      SerialBT.println(contadorReconexionExitosa);
       
-//       Serial.print("contadorReconexionFallida: ");
-//       Serial.println(contadorReconexionFallida);
+      Serial.print("contadorReconexionFallida: ");
+      Serial.println(contadorReconexionFallida);
 
-//       SerialBT.print("contadorReconexionFallida: ");
-//       SerialBT.println(contadorReconexionFallida);
-//     break;
-//     case 'Y':
+      SerialBT.print("contadorReconexionFallida: ");
+      SerialBT.println(contadorReconexionFallida);
+    break;
+    case 'Y':
       
-//       Serial.print("wifiSSIDEEPROM: ");
-//       Serial.println(wifiSSIDEEPROM);
+      Serial.print("wifiSSIDEEPROM: ");
+      Serial.println(wifiSSIDEEPROM);
 
-//       SerialBT.print("wifiSSIDEEPROM: ");
-//       SerialBT.println(wifiSSIDEEPROM);
+      SerialBT.print("wifiSSIDEEPROM: ");
+      SerialBT.println(wifiSSIDEEPROM);
       
-//       Serial.print("wifiPASSEEPROM: ");
-//       Serial.println(wifiPASSEEPROM);
+      Serial.print("wifiPASSEEPROM: ");
+      Serial.println(wifiPASSEEPROM);
 
-//       SerialBT.print("wifiPASSEEPROM: ");
-//       SerialBT.println(wifiPASSEEPROM);
+      SerialBT.print("wifiPASSEEPROM: ");
+      SerialBT.println(wifiPASSEEPROM);
 
-//       Serial.print("brokerEEPROM: ");
-//       Serial.println(brokerEEPROM);
+      Serial.print("brokerEEPROM: ");
+      Serial.println(brokerEEPROM);
 
-//       SerialBT.print("brokerEEPROM: ");
-//       SerialBT.println(brokerEEPROM);
-//     break;
-//     default:
-//       Serial.println("Parámetro incorrecto");
-//     break;
+      SerialBT.print("brokerEEPROM: ");
+      SerialBT.println(brokerEEPROM);
+    break;
+    default:
+      Serial.println("Parámetro incorrecto");
+    break;
 
-//   }  
-// }
+  }  
+}
 
 void setupModoRed(void){
 
@@ -1781,7 +1736,7 @@ void setup_mqtt(void){
 	}
 
 }
-
+/*
 // Handle what happens when you receive new messages
 void handleNewMessages(int numNewMessages) {
 	
@@ -1833,4 +1788,48 @@ void handleNewMessages(int numNewMessages) {
     }
   }
   
+}
+*/
+
+void setup_telegram(void){
+
+    myBot.setUpdateTime(1000);
+    myBot.setTelegramToken(token);
+
+    // Check if all things are ok
+    Serial.print("\nTest Telegram connection... ");
+    myBot.begin() ? Serial.println("OK") : Serial.println("NOK");
+
+    Serial.print("Bot name: @");
+    Serial.println(myBot.getBotName());
+
+}
+
+void chequearTelegram(void){
+
+  // local variable to store telegram message data
+  TBMessage msg;
+  
+  // if there is an incoming message...
+  if (myBot.getNewMessage(msg)) {
+    String msgText = msg.text;
+
+    if (msgText.equals("/light_on")) {                 // if the received message is "LIGHT ON"...
+      digitalWrite(LED_ONBOARD, HIGH);                          // turn on the LED (inverted logic!)
+      myBot.sendMessage(msg, "Light is now ON");       // notify the sender
+    }
+    else if (msgText.equals("/light_off")) {           // if the received message is "LIGHT OFF"...
+      digitalWrite(LED_ONBOARD, LOW);                          // turn off the led (inverted logic!)
+      myBot.sendMessage(msg, "Light is now OFF");       // notify the sender
+    }
+    else {                                              // otherwise...
+      // generate the message for the sender
+      String reply;
+      reply = "Welcome " ;
+      reply += msg.sender.username;
+      reply += ".\nTry /light_on or /light_off ";
+      myBot.sendMessage(msg, reply);                    // and send it
+    }
+  }
+
 }
