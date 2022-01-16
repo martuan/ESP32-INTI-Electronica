@@ -3,6 +3,7 @@
         {
             "name": "Win32",
             "includePath": [
+                "C:\\Users\\martin\\Documents\\Arduino\\libraries\\WebSerial\\src",
                 "C:\\Users\\martin\\Documents\\Arduino\\tools\\**",
                 "C:\\Users\\martin\\Documents\\Arduino\\hardware\\espressif\\esp32\\**",
                 "C:\\Users\\martin\\Documents\\Arduino\\libraries\\**"

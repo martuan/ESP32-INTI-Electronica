@@ -41,6 +41,7 @@
   *  Se contabilizan las reconexiones exitosas y las fallidas
   *  Imprime por bluetooth las credenciales wifi almacenadas en EEPROM
   *  Permite interactuar desde un bot de Telegram
+  *  Permite enviar y recibir mensajes desde un browser con WebSerial
 */
 
 #include <Arduino.h>
@@ -65,19 +66,25 @@
 // //#include <ArduinoOTA.h>
 // //#include <WiFiManager.h> // https://github.com/tzapu/WiFiManager  
 // //#include <webserial_webpage.h>
-//#include <WebSerial.h>
-//#include <AsyncTCP.h>
-//#include <ESPAsyncWebServer.h>
+#include <WiFi.h>
+#include <AsyncTCP.h>//Debe modificarse una línea: 
+        //Cambiar esta
+        //xTaskCreateUniversal(_async_service_task, "async_tcp", 8192 * 2, NULL, 3, &_async_service_task_handle, CONFIG_ASYNC_TCP_RUNNING_CORE);
+        //Por esta
+        //xTaskCreatePinnedToCore(_async_service_task, "async_tcp", 8192 * 2, NULL, 3, &_async_service_task_handle, CONFIG_ASYNC_TCP_RUNNING_CORE);
+#include <ESPAsyncWebServer.h>
+#include <WebSerial.h>
 
 #include <WiFiClientSecure.h>
-#include <UniversalTelegramBot.h>   // Universal Telegram Bot Library written by Brian Lough: https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot
+//#include <UniversalTelegramBot.h>   // Universal Telegram Bot Library written by Brian Lough: https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot
 #include <ArduinoJson.h>
-#include <WiFi.h>
+
 #include <time.h>
 #include <AsyncTelegram2.h>
 #include <WiFiClient.h>
 #include <SSLClient.h>  
 #include "tg_certificate.h"
+
 //#include <PubSubClient.h>
 
 
@@ -253,7 +260,7 @@ char fechaHora[50];
 // auto font2 = &FreeSans12pt7b;
 // auto font3 = &FreeSans18pt7b;
 
-//AsyncWebServer server(80);
+AsyncWebServer serverWebSerial(80);
 
 //**************************************
 //*********** BLUETOOTH  *****************
@@ -298,11 +305,13 @@ void switchCaseParametros(char, String);
 // void modoAccessPoint(void);
 // void imprimirModo(void);
 // void handTempText(void);
-void recvMsg(uint8_t *, size_t);
+void recvMsgWebSerial(uint8_t *, size_t);
 void setup_mqtt(void);
 void handleNewMessages(int);
 void chequearTelegram(void);
 void setup_telegram(void);
+
+
 //timer de usos generales 1000ms
 void IRAM_ATTR onTimer3() {
 
@@ -344,6 +353,7 @@ void setup() {
 
     macAdd = WiFi.macAddress();
     Serial.println( "MAC address: " + macAdd );
+    SerialBT.println("MAC address: " + macAdd);
 
 
 
@@ -382,11 +392,11 @@ void setup() {
     setupModoRed();//configura MQTT, revisa conectividad
 
     //imprimirModo();//informa por display Modo local o Modo Red
-/*
-    WebSerial.begin(&server);
-    WebSerial.msgCallback(recvMsg);
-    server.begin();
-*/
+
+    WebSerial.begin(&serverWebSerial);
+    WebSerial.msgCallback(recvMsgWebSerial);
+    serverWebSerial.begin();
+
     setup_telegram();// Set the Telegram bot properies
   
     
@@ -416,10 +426,11 @@ void loop() {
       flagProceso1 = 0;
       numero = random(1,50);
 	    Serial.println(numero);
+      SerialBT.println(numero);
       //publicarData(numero);
 	  
 	  
-	  	//WebSerial.println("Hello!");
+	  	WebSerial.println("Hello!");
 	
     }
 
@@ -434,6 +445,7 @@ void loop() {
 		
       }else{
         Serial.println("Perdió la conexión");
+        SerialBT.println("Perdió la conexión");
         flagConexionOK = 0;//hubo un problema, lo avisa mediante el flag
       }
    
@@ -526,13 +538,18 @@ void setup_wifi(){
       
         Serial.println("No es posible conectar a WiFi");
         Serial.println("Se cambia a MODO LOCAL");
+        SerialBT.println("No es posible conectar a WiFi");
+        SerialBT.println("Se cambia a MODO LOCAL");
 
       }else{//si logró conectarse
 
         Serial.println("");
         Serial.println("Conectado a red WiFi!");
         Serial.println("Dirección IP: ");
+        SerialBT.println("Conectado a red WiFi!");
+        SerialBT.println("Dirección IP: ");
         Serial.println(WiFi.localIP());
+        SerialBT.println(WiFi.localIP());
         delay(5000);
 		#ifdef ESP32
 			//client.setCACert(TELEGRAM_CERTIFICATE_ROOT); // Add root certificate for api.telegram.org
@@ -558,6 +575,7 @@ void reconnect() {
 
   while (!client1.connected() == 1 && flagConexionOK == 0) {
     Serial.println("Intentando conexión Mqtt1...");
+    SerialBT.println("Intentando conexión Mqtt1...");
     /*
     Serial.print("mqtt_server = ");
     Serial.println(mqtt_user);
@@ -574,11 +592,14 @@ void reconnect() {
     Serial.print(resultado);
     if(resultado == 1){
       Serial.println("Conectado!");
+      SerialBT.println("Conectado!");
       flagConexionOK = 1;
 	  if(client1.subscribe(root_topic_subscribe)){
         Serial.println("Suscripcion ok");
+        SerialBT.println("Suscripcion ok");
 	  }else{
         Serial.println("fallo Suscripción");
+        SerialBT.println("fallo Suscripción");
       }
     
     }else{
@@ -1189,7 +1210,9 @@ void publicarKeepAlive(void){
   client1.publish(handtempKeepAlive_topic_publish, msgKeepAlive);
   Serial.println(handtempKeepAlive_topic_publish);
   Serial.println(msgKeepAlive);
-  //WebSerial.println(msgKeepAlive);
+  SerialBT.println(handtempKeepAlive_topic_publish);
+  SerialBT.println(msgKeepAlive);
+  WebSerial.println(msgKeepAlive);
 
 }
 
@@ -1695,8 +1718,8 @@ void setupModoRed(void){
 //   display.setFont(mainFont);  
 
 // }
-/*
-void recvMsg(uint8_t *data, size_t len){
+
+void recvMsgWebSerial(uint8_t *data, size_t len){
   WebSerial.println("Received Data...");
   String d = "";
   for(int i=0; i < len; i++){
@@ -1710,7 +1733,8 @@ void recvMsg(uint8_t *data, size_t len){
     digitalWrite(LED_ONBOARD, LOW);
   }
 }
-*/
+
+
 void setup_mqtt(void){
 
 	client1.setServer(mqtt_server, mqtt_port);//inicializa server en broker local
@@ -1724,12 +1748,16 @@ void setup_mqtt(void){
 	if(client1.connected()){//si logró reconectarse o ya estaba conectado
 		Serial.println("Conexión OK: Wifi y MQTT conectados");
 		Serial.println("MODO RED");
+    SerialBT.println("Conexión OK: Wifi y MQTT conectados");
+		SerialBT.println("MODO RED");
 		//flagCambioModoLocal = 0;//no hace falta cambiar a modo local
 		flagConexionOK = 1;
 		
 	}else{
 		Serial.println("Conexión Errónea: Wifi y MQTT no conectados");
 		Serial.println("MODO LOCAL...(temporal)");
+    SerialBT.println("Conexión Errónea: Wifi y MQTT no conectados");
+		SerialBT.println("MODO LOCAL...(temporal)");
 		//flagCambioModoLocal = 1;
 		//flagModoRed = 0;
 		flagConexionOK = 0;
