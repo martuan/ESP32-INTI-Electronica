@@ -2,19 +2,6 @@
     "version": 4,
     "configurations": [
         {
-            "name": "Linux",
-            "compilerPath": "/usr/bin/gcc",
-            "compilerArgs": [],
-            "intelliSenseMode": "linux-gcc-x64",
-            "includePath": [
-                "${workspaceFolder}/**"
-            ],
-            "forcedInclude": [],
-            "cStandard": "gnu17",
-            "cppStandard": "gnu++14",
-            "defines": []
-        },
-        {
             "name": "Arduino",
             "compilerPath": "/home/nestor/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/bin/xtensa-esp32-elf-g++",
             "compilerArgs": [
@@ -105,6 +92,7 @@
                 "/home/nestor/.arduino15/packages/esp32/hardware/esp32/1.0.6/tools/sdk/include/fb_gfx",
                 "/home/nestor/.arduino15/packages/esp32/hardware/esp32/1.0.6/cores/esp32",
                 "/home/nestor/.arduino15/packages/esp32/hardware/esp32/1.0.6/variants/esp32",
+                "/home/nestor/Arduino/libraries/DHT_sensor_library_for_ESPx",
                 "/home/nestor/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/include/c++/5.2.0",
                 "/home/nestor/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/include/c++/5.2.0/xtensa-esp32-elf",
                 "/home/nestor/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/include/c++/5.2.0/backward",
