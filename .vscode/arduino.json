@@ -1,6 +1,11 @@
 {
-    "configuration": "PSRAM=disabled,PartitionScheme=default,CPUFreq=240,FlashMode=qio,FlashFreq=80,FlashSize=4M,UploadSpeed=921600,DebugLevel=none",
+    "sketch": "firmware/MQTT-PubSub.ino",
+    "port": "/dev/ttyUSB0",
     "board": "esp32:esp32:esp32",
+<<<<<<< HEAD
     "port": "/dev/ttyUSB0",
     "sketch": "ESP32-Prueba/Prueba.ino"
+=======
+    "configuration": "PSRAM=disabled,PartitionScheme=huge_app,CPUFreq=240,FlashMode=qio,FlashFreq=80,FlashSize=4M,UploadSpeed=921600,DebugLevel=none"
+>>>>>>> 0722bd34d1a08d923ff5dde8c43f4a5f31760872
 }
