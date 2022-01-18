@@ -94,22 +94,18 @@
                 "/home/martin/.arduino15/packages/esp32/hardware/esp32/1.0.6/variants/esp32",
                 "/home/martin/Descargas/ARDUINOIDE/arduino-1.8.8/libraries/PubSubClient/src",
                 "/home/martin/.arduino15/packages/esp32/hardware/esp32/1.0.6/libraries/BluetoothSerial/src",
-                "/home/martin/.arduino15/packages/esp32/hardware/esp32/1.0.6/libraries/WiFi/src",
-                "/home/martin/Descargas/ARDUINOIDE/arduino-1.8.8/libraries/AsyncTCP-master/src",
-                "/home/martin/Descargas/ARDUINOIDE/arduino-1.8.8/libraries/ESPAsyncWebServer-master/src",
-                "/home/martin/.arduino15/packages/esp32/hardware/esp32/1.0.6/libraries/FS/src",
-                "/home/martin/Documentos/Arduino Projects/libraries/WebSerial/src",
                 "/home/martin/.arduino15/packages/esp32/hardware/esp32/1.0.6/libraries/WiFiClientSecure/src",
+                "/home/martin/.arduino15/packages/esp32/hardware/esp32/1.0.6/libraries/WiFi/src",
+                "/home/martin/Documentos/Arduino Projects/libraries/UniversalTelegramBot/src",
                 "/home/martin/Documentos/Arduino Projects/libraries/ArduinoJson/src",
-                "/home/martin/Documentos/Arduino Projects/libraries/AsyncTelegram2/src",
-                "/home/martin/Documentos/Arduino Projects/libraries/SSLClient/src",
                 "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/include/c++/5.2.0",
                 "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/include/c++/5.2.0/xtensa-esp32-elf",
                 "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/include/c++/5.2.0/backward",
                 "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/lib/gcc/xtensa-esp32-elf/5.2.0/include",
                 "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/lib/gcc/xtensa-esp32-elf/5.2.0/include-fixed",
                 "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/include",
-                "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/sysroot/usr/include"
+                "/home/martin/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc/1.22.0-97-gc752ad5-5.2.0/xtensa-esp32-elf/sysroot/usr/include",
+                "C:/Users/martin/Documents/Arduino/libraries/**"
             ],
             "forcedInclude": [
                 "/home/martin/.arduino15/packages/esp32/hardware/esp32/1.0.6/cores/esp32/Arduino.h"
@@ -358,6 +354,20 @@
                 "__ATOMIC_RELEASE=3",
                 "USBCON"
             ]
+        },
+        {
+            "name": "Win32",
+            "compilerPath": "",
+            "compilerArgs": [],
+            "intelliSenseMode": "",
+            "includePath": [
+                "C:\\Users\\martin\\Documents\\Arduino\\libraries\\WebSerial\\src",
+                "C:/Users/martin/Documents/Arduino/libraries/**"
+            ],
+            "forcedInclude": [],
+            "cStandard": "",
+            "cppStandard": "",
+            "defines": []
         }
     ]
 }

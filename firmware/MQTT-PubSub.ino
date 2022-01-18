@@ -1,9 +1,8 @@
 /*
-  ESP32-INTI-Electrónica (NESTOR)
+  ESP32-INTI-Electrónica
   Versión 1.0
-  Fecha   13/01/2022
+  Fecha   15/01/2022
   Link    https://github.com/martuan/ESP32-INTI-Electronica/
-
   Sistema IoT para diversas aplicaciones en INTI con capacidad de 
   enviar datos a la nube y acceder a ellos con cualquier dispositivo 
   conectado a la red. 
@@ -40,37 +39,84 @@
   *  Se cambia tiempo de reconexión a la red
   *  Se contabilizan las reconexiones exitosas y las fallidas
   *  Imprime por bluetooth las credenciales wifi almacenadas en EEPROM
+  *  Permite interactuar desde un bot de Telegram
+  *  Permite enviar y recibir mensajes desde un browser con WebSerial
 */
 
 #include <Arduino.h>
-#include <PubSubClient.h>
-#include <Wire.h>
-#include <SparkFunMLXm.h>
-#include <ArduinoJson.h>
-#include <SPI.h>
-#include <Adafruit_SH1106.h>
-#include <Adafruit_GFX.h>
-#include <Fonts/FreeSans9pt7b.h>
-#include <Fonts/FreeSans12pt7b.h>
-#include <Fonts/FreeSans18pt7b.h>
-#include <esp_task_wdt.h>
-#include <BluetoothSerial.h>
-#include <Adafruit_NeoPixel.h>
-#include <EEPROM.h>
-#include <ESPmDNS.h>
-#include <WiFiUdp.h>
-#include <ArduinoOTA.h>
-#include <WiFiManager.h> // https://github.com/tzapu/WiFiManager  
-//#include <webserial_webpage.h>
-#include <WebSerial.h>
-#include <AsyncTCP.h>
+ #include <PubSubClient.h>
+// #include <Wire.h>
+// #include <SparkFunMLXm.h>
+
+// #include <ArduinoJson.h>
+
+// #include <SPI.h>
+// #include <Adafruit_SH1106.h>
+// #include <Adafruit_GFX.h>
+// #include <Fonts/FreeSans9pt7b.h>
+// #include <Fonts/FreeSans12pt7b.h>
+// #include <Fonts/FreeSans18pt7b.h>
+ #include <esp_task_wdt.h>
+ #include <BluetoothSerial.h>
+// #include <Adafruit_NeoPixel.h>
+// #include <EEPROM.h>
+// #include <ESPmDNS.h>
+// //#include <WiFiUdp.h>
+// //#include <ArduinoOTA.h>
+// //#include <WiFiManager.h> // https://github.com/tzapu/WiFiManager  
+// //#include <webserial_webpage.h>
+#include <WiFi.h>
+#include <AsyncTCP.h>//Debe modificarse una línea: 
+        //Cambiar esta
+        //xTaskCreateUniversal(_async_service_task, "async_tcp", 8192 * 2, NULL, 3, &_async_service_task_handle, CONFIG_ASYNC_TCP_RUNNING_CORE);
+        //Por esta
+        //xTaskCreatePinnedToCore(_async_service_task, "async_tcp", 8192 * 2, NULL, 3, &_async_service_task_handle, CONFIG_ASYNC_TCP_RUNNING_CORE);
 #include <ESPAsyncWebServer.h>
-//BLA BLA BLA
-//NESTOR
+#include <WebSerial.h>
+
+#include <WiFiClientSecure.h>
+//#include <UniversalTelegramBot.h>   // Universal Telegram Bot Library written by Brian Lough: https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot
+#include <ArduinoJson.h>
+
+#include <time.h>
+#include <AsyncTelegram2.h>
+#include <WiFiClient.h>
+#include <SSLClient.h>  
+#include "tg_certificate.h"
+
+//#include <PubSubClient.h>
 
 
-
+#ifndef ESP32
+  #define ESP32
+#endif
+#define LED_BUILTIN 2
 #define LED_ONBOARD 2
+
+//************CONFIGURACIÓN DE TELEGRAM*****************
+
+#define USE_CLIENTSSL true  
+// Timezone definition
+#define MYTZ "CET-1CEST,M3.5.0,M10.5.0/3"
+
+WiFiClient base_client;
+SSLClient client(base_client, TAs, (size_t)TAs_NUM, A0, 1, SSLClient::SSL_ERROR);
+
+AsyncTelegram2 myBot(client);
+//const char* ssid  =  "milton";     // SSID WiFi network
+//const char* pass  =  "paternal";     // Password  WiFi network
+//String ssid = "milton";
+//String password = "paternal";
+String ssid = "wifi01-ei";
+String password = "Ax32MnF1975-ReB";
+
+const char* token =  "5021419842:AAGWdRxVtpBNxiWtD3oEDN_CIkK1LnuqefE";  // Telegram token
+
+bool ledState = LOW;
+
+//************CONFIGURACIÓN DE TELEGRAM*****************
+
+
 
 // define the number of bytes you want to access
 #define EEPROM_SIZE 300
@@ -90,7 +136,7 @@ String version = "V:1.00";
 
 #define LINEHEIGHT 22  // para saltos de linea
 
-Adafruit_SH1106 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
+//Adafruit_SH1106 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
 // Neopixel
 #define PIN 33
 #define CANTLEDS  16
@@ -163,8 +209,6 @@ uint8_t flagModoAP = 0;
 int lecturaSwitchMODO = 0;
 String savedSSID = {};
 String savedPASS = {};
-String ssid = {};
-String password = {};
 char flagOTA = 0;
 String ssidOTA = {};
 String passwordOTA = {};
@@ -210,12 +254,12 @@ char fechaHora[50];
 //**************************************
 
 // fuentes de texto
-auto mainFont = &FreeSans12pt7b;
-auto font1 = &FreeSans9pt7b;
-auto font2 = &FreeSans12pt7b;
-auto font3 = &FreeSans18pt7b;
+// auto mainFont = &FreeSans12pt7b;
+// auto font1 = &FreeSans9pt7b;
+// auto font2 = &FreeSans12pt7b;
+// auto font3 = &FreeSans18pt7b;
 
-AsyncWebServer server(80);
+AsyncWebServer serverWebSerial(80);
 
 //**************************************
 //*********** BLUETOOTH  *****************
@@ -234,34 +278,38 @@ BluetoothSerial SerialBT;
 
 
 // WIFI Y MQTT
-void callback(char* topic, byte* payload, unsigned int length);
-void reconnect();
-void setup_wifi();
+ void callback(char* topic, byte* payload, unsigned int length);
+ void reconnect();
+ void setup_wifi();
 
-// DISPLAY
-void showAllDataDebugMode(double tempC, double tempAmbC, float dist);
+// // DISPLAY
+// void showAllDataDebugMode(double tempC, double tempAmbC, float dist);
 void cambioDeParametros(void);
-//void grabarEmisividadEnSensorIR(void);
+// //void grabarEmisividadEnSensorIR(void);
 void publicarDataAmbiente(double, char[]);
 void publicarDataObjeto(double, double, double, char[]);
 void publicarData(long);
-void obtenerFechaHora(void);
+// void obtenerFechaHora(void);
 
-void encenderNeopixel(char);
-void apagarNeopixel(void);
+// void encenderNeopixel(char);
+// void apagarNeopixel(void);
 void publicarKeepAlive(void);
 void cambiarConfigMQTT(uint8_t);
 void comprobarConexion(void);
-void probarNeopixel(void);
-void setupModoRed(void);
-void fallaConexion(void);
-void displayText(char);
+// void probarNeopixel(void);
+ void setupModoRed(void);
+// void fallaConexion(void);
+// void displayText(char);
 void switchCaseParametros(char, String);
-void modoAccessPoint(void);
-void imprimirModo(void);
-void handTempText(void);
-void recvMsg(uint8_t *, size_t);
+// void modoAccessPoint(void);
+// void imprimirModo(void);
+// void handTempText(void);
+void recvMsgWebSerial(uint8_t *, size_t);
 void setup_mqtt(void);
+void handleNewMessages(int);
+void chequearTelegram(void);
+void setup_telegram(void);
+
 
 //timer de usos generales 1000ms
 void IRAM_ATTR onTimer3() {
@@ -270,15 +318,15 @@ void IRAM_ATTR onTimer3() {
     contadorProceso2++;
 	  contadorProceso3++;
 
-    if(contadorProceso1 == tiempo1/6){//proceso 1
-        contadorProceso1 = 0;//resetea el contador
-        flagProceso1 = 1;
-    }
+  if(contadorProceso1 == tiempo1/60){//proceso 1
+      contadorProceso1 = 0;//resetea el contador
+      flagProceso1 = 1;
+  }
 	if(contadorProceso2 == tiempo1){//proceso 2
         contadorProceso2 = 0;//resetea el contador
         flagProceso2 = 1;
     }
-    if(contadorProceso3 == tiempo1 * 10){//proceso 3 (cada 10 min)
+    if(contadorProceso3 == tiempo1 * 2){//proceso 3 (cada 2 min)
         contadorProceso3 = 0;//resetea el contador
         flagProceso3 = 1;//para chequear conexión con red wifi y broker
     }
@@ -300,23 +348,18 @@ void setup() {
     
     Serial.begin(115200);
         
-
-
     SerialBT.begin("INTI-ESP32 Bluetooth"); //Bluetooth device name
 
     macAdd = WiFi.macAddress();
     Serial.println( "MAC address: " + macAdd );
+    SerialBT.println("MAC address: " + macAdd);
 
-    ssid = "wifi01-ei";
-    password = "Ax32MnF1975-ReB";
-    //ssid = "milton";
-    //password = "paternal";
+
 
 	  client1.subscribe(root_topic_subscribe);
 
 	  randomSeed(analogRead(27));
-    
-
+   
     timer3 = timerBegin(2, 80, true);
     timerAttachInterrupt(timer3, &onTimer3, true);
     timerAlarmWrite(timer3, 1000000, true);//valor en microsegundos [1 s]
@@ -326,34 +369,38 @@ void setup() {
     esp_task_wdt_add(NULL); //add current thread to WDT watch
 
     pinMode(LED_ONBOARD, OUTPUT);
+
+ 
     //digitalWrite(buzzPin, HIGH);
     //cargarDesdeEEPROM();//levanta las variables guardadas previamente en EEPROM
     
     // inicio display
-    display.begin(SH1106_SWITCHCAPVCC);
-    display.clearDisplay();//borra cualquier dato del buffer del display
-    display.setFont(mainFont);
-    display.println(" ");//línea vacía
-    display.display();
+    // display.begin(SH1106_SWITCHCAPVCC);
+    // display.clearDisplay();//borra cualquier dato del buffer del display
+    // display.setFont(mainFont);
+    // display.println(" ");//línea vacía
+    // display.display();
 
 
     // pantalla de bienvenida
-    handTempText();
+    //handTempText();
 
     //pixels.begin(); // This initializes the NeoPixel library.
     //probarNeopixel();
   
     setupModoRed();//configura MQTT, revisa conectividad
 
+    //imprimirModo();//informa por display Modo local o Modo Red
 
-    imprimirModo();//informa por display Modo local o Modo Red
+    WebSerial.begin(&serverWebSerial);
+    WebSerial.msgCallback(recvMsgWebSerial);
+    serverWebSerial.begin();
 
-    WebSerial.begin(&server);
-    WebSerial.msgCallback(recvMsg);
-    server.begin();
-
+    setup_telegram();// Set the Telegram bot properies
+  
     
-    
+      
+      
 }
 
 
@@ -363,18 +410,27 @@ void setup() {
 
 
 void loop() {
+
+  //Chequea cada cierto tiempo mensajes enviados por Telegram
+  chequearTelegram();
+
+	long numero = 0;
+
+  cambioDeParametros();
+
+  client1.loop();
     
-	  long numero = 0;
-
-    cambioDeParametros();
-
-    client1.loop();
-    //WebSerial.println("Hello!");
 
     if(flagProceso1 == 1){//publica cada cierto tiempo un número aleatorio en formato json
       flagProceso1 = 0;
       numero = random(1,50);
+	    Serial.println(numero);
+      SerialBT.println(numero);
       publicarData(numero);
+	  
+	  
+	  	WebSerial.println("Hello!");
+	
     }
 
     //Keep Alive
@@ -388,6 +444,7 @@ void loop() {
 		
       }else{
         Serial.println("Perdió la conexión");
+        SerialBT.println("Perdió la conexión");
         flagConexionOK = 0;//hubo un problema, lo avisa mediante el flag
       }
    
@@ -396,32 +453,27 @@ void loop() {
     //alimentar watchDog
     esp_task_wdt_reset();
 
-    
-
-    
-
     //cada cierto tiempo chequea la conexión MQTT solo si la perdió
-
     if(flagProceso3 && flagConexionOK == 0){
 
       flagProceso3 = 0;
-      displayText('R');
+      //displayText('R');
       Serial.println("Intentando recuperar la conexión");
       comprobarConexion();//si alguna conexión se perdió, la reestablece
       if(flagConexionOK){//si la recuperó
         Serial.print("Se ha recuperado la conexión. flagConexionOK = ");
         Serial.println(flagConexionOK);
-        displayText('1');
+        //displayText('1');
         contadorReconexionExitosa++;
       }else{//si no la recuperó
         
         Serial.print("[PROBLEMAS] No se ha recuperado la conexión. flagConexionOK = ");
         Serial.println(flagConexionOK);
-        displayText('0');
+        //displayText('0');
         contadorReconexionFallida++;
       }
     }
-   
+  
     
 }
 
@@ -472,6 +524,8 @@ void setup_wifi(){
         
       //WiFi.persistent(false);
       WiFi.begin(ssidConverted, passwordConverted);
+	  
+
 
       while ((WiFi.status() != WL_CONNECTED) && cuenta < 20) {//límite de 20 intentos de 500 ms
         delay(500);
@@ -483,14 +537,22 @@ void setup_wifi(){
       
         Serial.println("No es posible conectar a WiFi");
         Serial.println("Se cambia a MODO LOCAL");
+        SerialBT.println("No es posible conectar a WiFi");
+        SerialBT.println("Se cambia a MODO LOCAL");
 
       }else{//si logró conectarse
 
         Serial.println("");
         Serial.println("Conectado a red WiFi!");
         Serial.println("Dirección IP: ");
+        SerialBT.println("Conectado a red WiFi!");
+        SerialBT.println("Dirección IP: ");
         Serial.println(WiFi.localIP());
+        SerialBT.println(WiFi.localIP());
         delay(5000);
+		#ifdef ESP32
+			//client.setCACert(TELEGRAM_CERTIFICATE_ROOT); // Add root certificate for api.telegram.org
+		#endif	 
 
       }
 
@@ -512,6 +574,7 @@ void reconnect() {
 
   while (!client1.connected() == 1 && flagConexionOK == 0) {
     Serial.println("Intentando conexión Mqtt1...");
+    SerialBT.println("Intentando conexión Mqtt1...");
     /*
     Serial.print("mqtt_server = ");
     Serial.println(mqtt_user);
@@ -528,11 +591,14 @@ void reconnect() {
     Serial.print(resultado);
     if(resultado == 1){
       Serial.println("Conectado!");
+      SerialBT.println("Conectado!");
       flagConexionOK = 1;
 	  if(client1.subscribe(root_topic_subscribe)){
         Serial.println("Suscripcion ok");
+        SerialBT.println("Suscripcion ok");
 	  }else{
         Serial.println("fallo Suscripción");
+        SerialBT.println("fallo Suscripción");
       }
     
     }else{
@@ -636,239 +702,239 @@ void callback(char* topic, byte* payload, unsigned int length){
 
 }
 
-void handTempText(void) {
+// void handTempText(void) {
 
  
-  int timeDisplayBienvenida = 2000;
+//   int timeDisplayBienvenida = 2000;
   
-  display.clearDisplay();
-  Serial.println("INTI-ESP32");
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-  display.setCursor(6,30);
-  display.clearDisplay();
-  display.println("INTI-ESP32");
-  display.drawFastHLine(8,10,112,WHITE);
-  display.drawFastHLine(8,40,112,WHITE);
-  display.setCursor(6,40 + LINEHEIGHT);
-  display.setFont(mainFont);
-  Serial.println(version);
-  display.println(version); 
-  display.display();
-  delay(timeDisplayBienvenida);
-  // limpio el bufer para la proxima pantalla
-  display.clearDisplay();
-  /*
-  if(flagConexionOK == 1){//si está en modo red
-    Serial.println("MODO RED");
-    display.setTextSize(1);
-    display.setTextColor(WHITE);
-    display.setCursor(6,30);
-    display.setFont(font1);
-    display.println("MODO RED");
-    display.display();
-    delay(2000);
-    display.clearDisplay();
-    display.setCursor(6,30);
-    display.println(macAdd);
-    display.display();
-    delay(5000);
-  }else{
-    Serial.println("MODO LOCAL");
-    display.setTextSize(1);
-    display.setTextColor(WHITE);
-    display.setCursor(6,30);
-    display.setFont(font1);
-    display.println("MODO LOCAL");
-    display.display();
-  }
+//   display.clearDisplay();
+//   Serial.println("INTI-ESP32");
+//   display.setTextSize(1);
+//   display.setTextColor(WHITE);
+//   display.setCursor(6,30);
+//   display.clearDisplay();
+//   display.println("INTI-ESP32");
+//   display.drawFastHLine(8,10,112,WHITE);
+//   display.drawFastHLine(8,40,112,WHITE);
+//   display.setCursor(6,40 + LINEHEIGHT);
+//   display.setFont(mainFont);
+//   Serial.println(version);
+//   display.println(version); 
+//   display.display();
+//   delay(timeDisplayBienvenida);
+//   // limpio el bufer para la proxima pantalla
+//   display.clearDisplay();
+//   /*
+//   if(flagConexionOK == 1){//si está en modo red
+//     Serial.println("MODO RED");
+//     display.setTextSize(1);
+//     display.setTextColor(WHITE);
+//     display.setCursor(6,30);
+//     display.setFont(font1);
+//     display.println("MODO RED");
+//     display.display();
+//     delay(2000);
+//     display.clearDisplay();
+//     display.setCursor(6,30);
+//     display.println(macAdd);
+//     display.display();
+//     delay(5000);
+//   }else{
+//     Serial.println("MODO LOCAL");
+//     display.setTextSize(1);
+//     display.setTextColor(WHITE);
+//     display.setCursor(6,30);
+//     display.setFont(font1);
+//     display.println("MODO LOCAL");
+//     display.display();
+//   }
   
-  delay(1000);
-  display.setFont(mainFont);
-  display.clearDisplay();
-*/
-}
+//   delay(1000);
+//   display.setFont(mainFont);
+//   display.clearDisplay();
+// */
+// }
 
-void imprimirModo(void){
+// void imprimirModo(void){
 
-    if(flagConexionOK == 1){//si está en modo red
-        Serial.println("MODO RED");
-        display.setTextSize(1);
-        display.setTextColor(WHITE);
-        display.setCursor(6,30);
-        display.setFont(font1);
-        display.println("MODO RED");
-        display.display();
-        delay(2000);
-        display.clearDisplay();
-        display.setCursor(6,30);
-        display.println(macAdd);
-        display.display();
-        delay(5000);
-    }else{
-        Serial.println("MODO LOCAL");
-        display.setTextSize(1);
-        display.setTextColor(WHITE);
-        display.setCursor(6,30);
-        display.setFont(font1);
-        display.println("MODO LOCAL");
-        display.display();
-    }
+//     if(flagConexionOK == 1){//si está en modo red
+//         Serial.println("MODO RED");
+//         display.setTextSize(1);
+//         display.setTextColor(WHITE);
+//         display.setCursor(6,30);
+//         display.setFont(font1);
+//         display.println("MODO RED");
+//         display.display();
+//         delay(2000);
+//         display.clearDisplay();
+//         display.setCursor(6,30);
+//         display.println(macAdd);
+//         display.display();
+//         delay(5000);
+//     }else{
+//         Serial.println("MODO LOCAL");
+//         display.setTextSize(1);
+//         display.setTextColor(WHITE);
+//         display.setCursor(6,30);
+//         display.setFont(font1);
+//         display.println("MODO LOCAL");
+//         display.display();
+//     }
     
-    delay(1000);
-    display.setFont(mainFont);
-    display.clearDisplay();
-}
+//     delay(1000);
+//     display.setFont(mainFont);
+//     display.clearDisplay();
+// }
 
-void fallaConexion(void) {
+// void fallaConexion(void) {
 
-  int timeDisplayBienvenida = 2000;
+//   int timeDisplayBienvenida = 2000;
   
-  display.clearDisplay();
-  Serial.println("INTI-ESP32");
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-  display.setCursor(6,30);
-  display.clearDisplay();
-  Serial.println("Falla conexión");
-  display.println("Falla conexión");
-  display.display();
-  delay(timeDisplayBienvenida);
-  // limpio el bufer para la proxima pantalla
-  display.clearDisplay();
+//   display.clearDisplay();
+//   Serial.println("INTI-ESP32");
+//   display.setTextSize(1);
+//   display.setTextColor(WHITE);
+//   display.setCursor(6,30);
+//   display.clearDisplay();
+//   Serial.println("Falla conexión");
+//   display.println("Falla conexión");
+//   display.display();
+//   delay(timeDisplayBienvenida);
+//   // limpio el bufer para la proxima pantalla
+//   display.clearDisplay();
     
-  display.setFont(mainFont);
+//   display.setFont(mainFont);
   
-}
+// }
 
 
-void modoAccessPoint(void) {
+// void modoAccessPoint(void) {
 
-  int timeDisplayBienvenida = 2000;
+//   int timeDisplayBienvenida = 2000;
   
-  display.clearDisplay();
-  Serial.println("INTI-ESP32 - Modo Access Point");
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-  display.setFont(font1);
-  display.setCursor(6,30);
-  display.clearDisplay();
-  Serial.println("SSID:INTI-ESP32");
-  Serial.println("PASS:12345678");
-  // limpio el bufer para la proxima pantalla
-  display.clearDisplay();
+//   display.clearDisplay();
+//   Serial.println("INTI-ESP32 - Modo Access Point");
+//   display.setTextSize(1);
+//   display.setTextColor(WHITE);
+//   display.setFont(font1);
+//   display.setCursor(6,30);
+//   display.clearDisplay();
+//   Serial.println("SSID:INTI-ESP32");
+//   Serial.println("PASS:12345678");
+//   // limpio el bufer para la proxima pantalla
+//   display.clearDisplay();
 
-  display.println("MODO AP:");//Imprime Modo AP
-  display.display();
+//   display.println("MODO AP:");//Imprime Modo AP
+//   display.display();
   
-  delay(timeDisplayBienvenida);
-  // limpio el bufer para la proxima pantalla
-  display.clearDisplay();
+//   delay(timeDisplayBienvenida);
+//   // limpio el bufer para la proxima pantalla
+//   display.clearDisplay();
   
-  display.setCursor(6,30);
-  display.println("SSID:");//Imprime SSID
-  display.println("INTI-ESP32");
-  display.display();
+//   display.setCursor(6,30);
+//   display.println("SSID:");//Imprime SSID
+//   display.println("INTI-ESP32");
+//   display.display();
   
-  delay(timeDisplayBienvenida);
-  // limpio el bufer para la proxima pantalla
-  display.clearDisplay();
+//   delay(timeDisplayBienvenida);
+//   // limpio el bufer para la proxima pantalla
+//   display.clearDisplay();
 
-  display.setCursor(6,30);
-  display.println("PASS:");//Imprime PASS
-  display.println("12345678");
-  display.display();
+//   display.setCursor(6,30);
+//   display.println("PASS:");//Imprime PASS
+//   display.println("12345678");
+//   display.display();
   
-  delay(timeDisplayBienvenida);
-  // limpio el bufer para la proxima pantalla
-  display.clearDisplay();    
-  display.setFont(mainFont);
-  display.setCursor(6,30);
+//   delay(timeDisplayBienvenida);
+//   // limpio el bufer para la proxima pantalla
+//   display.clearDisplay();    
+//   display.setFont(mainFont);
+//   display.setCursor(6,30);
   
-}
+// }
 
 
-void showTemperature(double temperature, String msg){
+// void showTemperature(double temperature, String msg){
 
-  int timeDisplay = 2000;
+//   int timeDisplay = 2000;
 
-  display.clearDisplay();
-  String tempText = static_cast<String>(round(temperature*100) / 100);
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-  //display.setCursor(10,20);
-  display.setCursor(3,20);
-  //display.setFont(secondFont);
-  display.setFont(font1);  // default font
-  //display.setFont(secondFont);  // default font
-  //display.println("Su temperatura es");
-  display.println("Su temperatura");
-  display.setFont(font3);
-  //display.setTextSize(1);
-  display.setCursor(26,52);
-  display.println(tempText);
-  display.display();
-  delay(timeDisplay);
-  display.clearDisplay();
+//   display.clearDisplay();
+//   String tempText = static_cast<String>(round(temperature*100) / 100);
+//   display.setTextSize(1);
+//   display.setTextColor(WHITE);
+//   //display.setCursor(10,20);
+//   display.setCursor(3,20);
+//   //display.setFont(secondFont);
+//   display.setFont(font1);  // default font
+//   //display.setFont(secondFont);  // default font
+//   //display.println("Su temperatura es");
+//   display.println("Su temperatura");
+//   display.setFont(font3);
+//   //display.setTextSize(1);
+//   display.setCursor(26,52);
+//   display.println(tempText);
+//   display.display();
+//   delay(timeDisplay);
+//   display.clearDisplay();
   
-  display.setFont(mainFont);
-  display.setCursor(10,26);
-  display.println("Acceso");
-  display.setCursor(10,26 + LINEHEIGHT);
-  display.println(msg);
-  display.display();
-  delay(timeDisplay);
-  display.clearDisplay();
+//   display.setFont(mainFont);
+//   display.setCursor(10,26);
+//   display.println("Acceso");
+//   display.setCursor(10,26 + LINEHEIGHT);
+//   display.println(msg);
+//   display.display();
+//   delay(timeDisplay);
+//   display.clearDisplay();
   
-}
+// }
 
 
-void showAllDataDebugMode(double tempC, double tempAmbC, float dist){
+// void showAllDataDebugMode(double tempC, double tempAmbC, float dist){
 
-  int timeDisplay = 6000;
+//   int timeDisplay = 6000;
 
-  display.clearDisplay();
-  String tempCText = static_cast<String>(round(tempC*100) / 100);
-  String tempAmbCText = static_cast<String>(round(tempAmbC*100) / 100);
-  String distText = static_cast<String>(round(dist*100) / 100);
-  String tempOffsetText = static_cast<String>(round(tempOffset*100) / 100);
-  //String tempAmbOffsetText = static_cast<String>(round(tempAmbOffset*100) / 100);
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-  //display.setCursor(10,20);
-  display.setCursor(3,15);
-  //display.setFont(secondFont);
-  display.setFont(font1);  // default font
-  //display.setFont(secondFont);  // default font
-  //display.println("Su temperatura es");
-  display.print("Tobj: ");
-  display.println(tempCText);
-  display.print("Tamb: ");
-  display.println(tempAmbCText);
-  display.print("Distancia: ");
-  display.println(distText);
+//   display.clearDisplay();
+//   String tempCText = static_cast<String>(round(tempC*100) / 100);
+//   String tempAmbCText = static_cast<String>(round(tempAmbC*100) / 100);
+//   String distText = static_cast<String>(round(dist*100) / 100);
+//   String tempOffsetText = static_cast<String>(round(tempOffset*100) / 100);
+//   //String tempAmbOffsetText = static_cast<String>(round(tempAmbOffset*100) / 100);
+//   display.setTextSize(1);
+//   display.setTextColor(WHITE);
+//   //display.setCursor(10,20);
+//   display.setCursor(3,15);
+//   //display.setFont(secondFont);
+//   display.setFont(font1);  // default font
+//   //display.setFont(secondFont);  // default font
+//   //display.println("Su temperatura es");
+//   display.print("Tobj: ");
+//   display.println(tempCText);
+//   display.print("Tamb: ");
+//   display.println(tempAmbCText);
+//   display.print("Distancia: ");
+//   display.println(distText);
 
-  //display.setTextSize(1);
-  //display.setCursor(26,52);
-  //display.println(tempText);
-  display.display();
-  delay(timeDisplay);
-  display.clearDisplay();
+//   //display.setTextSize(1);
+//   //display.setCursor(26,52);
+//   //display.println(tempText);
+//   display.display();
+//   delay(timeDisplay);
+//   display.clearDisplay();
 
-  display.setCursor(3,15);
+//   display.setCursor(3,15);
 
-  display.print("tOffs: ");
-  display.println(tempOffsetText);
-  //display.print("tAmbOffs: ");
-  //display.println(tempAmbOffsetText);
+//   display.print("tOffs: ");
+//   display.println(tempOffsetText);
+//   //display.print("tAmbOffs: ");
+//   //display.println(tempAmbOffsetText);
 
-  display.display();
-  delay(timeDisplay);
+//   display.display();
+//   delay(timeDisplay);
   
-  display.setFont(mainFont);  // default font
-  display.clearDisplay();
+//   display.setFont(mainFont);  // default font
+//   display.clearDisplay();
   
-}
+// }
 
 //puede cambiar parámetros a través del puerto serie o por bluetooth
 //Se debe enviar un caracter de identificación del parámetro a cambiar y
@@ -948,172 +1014,175 @@ void cambioDeParametros(void){
 
 }
 
-//realiza la lectura del timestamp desde el server ntp
-void obtenerFechaHora(void){
+// //realiza la lectura del timestamp desde el server ntp
+// void obtenerFechaHora(void){
 
-  if(!getLocalTime(&timeStamp)){
-      Serial.println("Failed to obtain time");
-  }else{
+//   if(!getLocalTime(&timeStamp)){
+//       Serial.println("Failed to obtain time");
+//   }else{
 
-      //guarda cada componente del timeStamp en variables
-      strftime(timeYear,10, "%Y", &timeStamp);
-      strftime(timeMonth,10, "%B", &timeStamp);
-      strftime(timeDayName,10, "%A", &timeStamp);
-      strftime(timeDayNumber,10, "%d", &timeStamp);
-      strftime(timeHour24,10, "%H", &timeStamp);   
-      strftime(timeHour12,10, "%I", &timeStamp);
-      strftime(timeMinute,10, "%M", &timeStamp);
-      strftime(timeSecond,10, "%S", &timeStamp);
+//       //guarda cada componente del timeStamp en variables
+//       strftime(timeYear,10, "%Y", &timeStamp);
+//       strftime(timeMonth,10, "%B", &timeStamp);
+//       strftime(timeDayName,10, "%A", &timeStamp);
+//       strftime(timeDayNumber,10, "%d", &timeStamp);
+//       strftime(timeHour24,10, "%H", &timeStamp);   
+//       strftime(timeHour12,10, "%I", &timeStamp);
+//       strftime(timeMinute,10, "%M", &timeStamp);
+//       strftime(timeSecond,10, "%S", &timeStamp);
       
-      strcpy(fechaHora, "");//borra el contenido del string
+//       strcpy(fechaHora, "");//borra el contenido del string
 
-      //arma un string con los componentes que interesan
-      strcat(fechaHora, timeYear);
-      strcat(fechaHora, " ");
-      strcat(fechaHora, timeMonth);
-      strcat(fechaHora, " ");
-      strcat(fechaHora, timeDayNumber);
-      strcat(fechaHora, " ");
-      strcat(fechaHora, timeHour24);
-      strcat(fechaHora, ":");
-      strcat(fechaHora, timeMinute);
-      strcat(fechaHora, ":");
-      strcat(fechaHora, timeSecond);
+//       //arma un string con los componentes que interesan
+//       strcat(fechaHora, timeYear);
+//       strcat(fechaHora, " ");
+//       strcat(fechaHora, timeMonth);
+//       strcat(fechaHora, " ");
+//       strcat(fechaHora, timeDayNumber);
+//       strcat(fechaHora, " ");
+//       strcat(fechaHora, timeHour24);
+//       strcat(fechaHora, ":");
+//       strcat(fechaHora, timeMinute);
+//       strcat(fechaHora, ":");
+//       strcat(fechaHora, timeSecond);
 
-  }
-}
+//   }
+// }
 
 
 
 void publicarDataObjeto(double tempC, double tempF, double emisividadL, char fechaHora[]){
         
-  //prepara el objeto JSON para publicar por MQTT
-  StaticJsonBuffer<300> JSONbuffer;
-  JsonObject& JSONencoder = JSONbuffer.createObject();
- 
-  JSONencoder["temp"] = round(tempC * 100) / 100;
-  
-  char JSONmessageBuffer[300];
-  JSONencoder.printTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
-  Serial.println("Enviando data de Temperatura del objeto por MQTT1...");
-  Serial.println(JSONmessageBuffer);
+	// ArduinoJson 6
+	DynamicJsonDocument doc(1024);
+	String docSerializado = {};
+	      
+	//prepara el objeto JSON para publicar por MQTT
+	doc["device"] = "ESP32";
+  	doc["temp"] = round(tempC * 100) / 100;
+  	doc["timeStamp"] = fechaHora;
+	serializeJson(doc, docSerializado);//le da formato JSON  
+	Serial.println("Enviando data de Temperatura del objeto por MQTT...");
+	Serial.println(docSerializado);
+	WebSerial.println(docSerializado);
 
-  client1.publish(tempObjeto_topic_publish, JSONmessageBuffer);
+	client1.publish(data_topic_publish, docSerializado.c_str());
 
 }
 
 void publicarDataAmbiente(double tempAmbienteC, char fechaHora[]){
 
-        
-  //prepara el objeto JSON para publicar por MQTT
-  StaticJsonBuffer<300> JSONbuffer;
-  JsonObject& JSONencoder = JSONbuffer.createObject();
+	// ArduinoJson 6
+	DynamicJsonDocument doc(1024);
+	String docSerializado = {};
 
-  JSONencoder["device"] = "ESP32";
-  JSONencoder["Temp Ambiente *C"] = round(tempAmbienteC * 100) / 100 ;
-  JSONencoder["timeStamp"] = fechaHora;
-  
-  char JSONmessageBuffer[300];
-  JSONencoder.printTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
-  Serial.println("Enviando data de Temperatura del ambiente por MQTT...");
-  Serial.println(JSONmessageBuffer);
-  
-  client1.publish(tempAmbiente_topic_publish, JSONmessageBuffer);
+
+	      
+	//prepara el objeto JSON para publicar por MQTT
+	doc["device"] = "ESP32";
+  	doc["Temp Ambiente *C"] = round(tempAmbienteC * 100) / 100 ;
+  	doc["timeStamp"] = fechaHora;
+	serializeJson(doc, docSerializado);//le da formato JSON  
+	Serial.println("Enviando data de Temperatura del ambiente por MQTT...");
+	Serial.println(docSerializado);
+	WebSerial.println(docSerializado);
+
+	client1.publish(data_topic_publish, docSerializado.c_str());
+      
 }
 
 void publicarData(long dato){
-        
-  //prepara el objeto JSON para publicar por MQTT
-  StaticJsonBuffer<300> JSONbuffer;
-  JsonObject& JSONencoder = JSONbuffer.createObject();
- 
-  JSONencoder["dato"] = round(dato * 100) / 100;
-  
-  char JSONmessageBuffer[300];
-  JSONencoder.printTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
-  Serial.println("Enviando data por MQTT1...");
-  Serial.println(JSONmessageBuffer);
-  WebSerial.println(JSONmessageBuffer);
 
-  client1.publish(data_topic_publish, JSONmessageBuffer);
+	// ArduinoJson 6
+	DynamicJsonDocument doc(1024);
+	String docSerializado = {};
+	      
+	//prepara el objeto JSON para publicar por MQTT
+	doc["dato"] = round(dato * 100) / 100;
+	serializeJson(doc, docSerializado);//le da formato JSON  
+	Serial.println("Enviando data por MQTT1...");
+	Serial.println(docSerializado);
+	WebSerial.println(docSerializado);
+
+	client1.publish(data_topic_publish, docSerializado.c_str());
 
 }
-/*
-void encenderNeopixel(char color){
+// /*
+// void encenderNeopixel(char color){
 
-    int i = 0;
+//     int i = 0;
 
-    pixels.setPin(33);
-    //pixels.setBrightness(200);
-    //pixels.show();
+//     pixels.setPin(33);
+//     //pixels.setBrightness(200);
+//     //pixels.show();
 
-    switch(color){
-        case 'R'://RED
-            //todos los LEDs en rojo
-            for(i = 0; i < CANTLEDS; i++){
-                pixels.setPixelColor(i, pixels.Color(255, 0, 0));
-            }
-            //pixels.show();
-        break;
-        case 'G'://GREEN
-            //todos los LEDs en verde
-            for(i = 0; i < CANTLEDS; i++){
-                pixels.setPixelColor(i, pixels.Color(0, 255, 0));
-            }
-            //pixels.show();
-        break;
-        case 'Y'://YELLOW
-            //todos los LEDs en amarillo
-            for(i = 0; i < CANTLEDS; i++){
-                pixels.setPixelColor(i, pixels.Color(255, 255, 0));
-            }
+//     switch(color){
+//         case 'R'://RED
+//             //todos los LEDs en rojo
+//             for(i = 0; i < CANTLEDS; i++){
+//                 pixels.setPixelColor(i, pixels.Color(255, 0, 0));
+//             }
+//             //pixels.show();
+//         break;
+//         case 'G'://GREEN
+//             //todos los LEDs en verde
+//             for(i = 0; i < CANTLEDS; i++){
+//                 pixels.setPixelColor(i, pixels.Color(0, 255, 0));
+//             }
+//             //pixels.show();
+//         break;
+//         case 'Y'://YELLOW
+//             //todos los LEDs en amarillo
+//             for(i = 0; i < CANTLEDS; i++){
+//                 pixels.setPixelColor(i, pixels.Color(255, 255, 0));
+//             }
 
-           // pixels.show();
-        break;
-        case 'B'://YELLOW
-            //todos los LEDs en amarillo
-            for(i = 0; i < CANTLEDS; i++){
-                pixels.setPixelColor(i, pixels.Color(255, 0, 255));
-            }
+//            // pixels.show();
+//         break;
+//         case 'B'://YELLOW
+//             //todos los LEDs en amarillo
+//             for(i = 0; i < CANTLEDS; i++){
+//                 pixels.setPixelColor(i, pixels.Color(255, 0, 255));
+//             }
 
-           // pixels.show();
-        break;
-        default:
-            Serial.println("Color incorrecto");
-        break;
-    }
+//            // pixels.show();
+//         break;
+//         default:
+//             Serial.println("Color incorrecto");
+//         break;
+//     }
 
-    pixels.show();
-    pixels.setPin(18);// cambia el pin del neopixel para canalizar los ruidos a otro pin
-    //delay(1000);
-    neopixelFueApagado = 0;//cambia el estado
+//     pixels.show();
+//     pixels.setPin(18);// cambia el pin del neopixel para canalizar los ruidos a otro pin
+//     //delay(1000);
+//     neopixelFueApagado = 0;//cambia el estado
     
-}
-*/
+// }
+// */
 
-/*
-void apagarNeopixel(void){
+// /*
+// void apagarNeopixel(void){
 
-    int i = 0;
+//     int i = 0;
 
-    //pixels.setPixelColor(0, pixels.Color(0, 0, 0));
-    for(i = 0; i < CANTLEDS; i++){
-        pixels.setPixelColor(i, pixels.Color(0, 0, 0));
-    }
-    pixels.show();
-    pixels.setPin(33);
+//     //pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+//     for(i = 0; i < CANTLEDS; i++){
+//         pixels.setPixelColor(i, pixels.Color(0, 0, 0));
+//     }
+//     pixels.show();
+//     pixels.setPin(33);
 
-    for(i = 0; i < CANTLEDS; i++){
-        pixels.setPixelColor(i, pixels.Color(0, 0, 0));
-    }
+//     for(i = 0; i < CANTLEDS; i++){
+//         pixels.setPixelColor(i, pixels.Color(0, 0, 0));
+//     }
     
-    pixels.show();
-    pixels.setPin(18);// cambia el pin del neopixel para canalizar los ruidos a otro pin
-    //pixels.show();
-    neopixelFueApagado = 1;//cambia el estado
+//     pixels.show();
+//     pixels.setPin(18);// cambia el pin del neopixel para canalizar los ruidos a otro pin
+//     //pixels.show();
+//     neopixelFueApagado = 1;//cambia el estado
      
-}
-*/
+// }
+// */
 
 void publicarKeepAlive(void){
   
@@ -1126,6 +1195,8 @@ void publicarKeepAlive(void){
   client1.publish(handtempKeepAlive_topic_publish, msgKeepAlive);
   Serial.println(handtempKeepAlive_topic_publish);
   Serial.println(msgKeepAlive);
+  SerialBT.println(handtempKeepAlive_topic_publish);
+  SerialBT.println(msgKeepAlive);
   WebSerial.println(msgKeepAlive);
 
 }
@@ -1219,16 +1290,16 @@ void switchCaseParametros(char charParamID, String valorParam){
 	  */
     break;
     case 'O':
+    /*
       tempOffset = valorParam.toDouble();
       Serial.print("TempOffset: ");
       Serial.println(tempOffset);
-
       //guarda en EEPROM el OFFSET de temperatura
       //tempOffsetEEPROM = (uint8_t)(tempOffset * 10);
       tempOffsetEEPROM = tempOffset;
       EEPROM.writeDouble(0, tempOffsetEEPROM);
       EEPROM.commit();
-
+*/
     break;
     case 'T':
       /*
@@ -1262,13 +1333,10 @@ void switchCaseParametros(char charParamID, String valorParam){
 	/*
       emisividadPorSerie = valorParam.toFloat();
       emisividad = (uint16_t)(emisividadPorSerie * 65535);
-
       Serial.println(emisividadPorSerie);
       Serial.println(emisividad);
-
       mlx1.writeEmissivityReg(emisividad);//escribe la emisividad al sensor
       mlx1.begin();
-
       delay(500);
       
       //Verificación de emisividad
@@ -1295,54 +1363,43 @@ void switchCaseParametros(char charParamID, String valorParam){
       delay(1000);
       Serial.println("Se leerá la emisividad");
       delay(3000);
-
       Serial.print("Emisividad sensor 1: ");
       Serial.println(mlx1.readEmissivity());
 */
     break;
     case 'W':
-
+/*
       Serial.println("Wifi: ");
       valorParamLength = strlen(valorParam.c_str());
       endIndex = valorParamLength;
-
       index = valorParam.indexOf(' ');
-
       ssid = valorParam.substring(0, index);
       Serial.println(ssid);
       //password = valorParam.substring(index + 1, endIndex - 1);
       password = valorParam.substring(index + 1, endIndex);
       Serial.println(password);
-
       //guarda config wifi en EEPROM
       EEPROM.writeString(EEPROM_ADDRESS_WIFI_SSID, ssid);
       EEPROM.commit();
       EEPROM.writeString(EEPROM_ADDRESS_WIFI_PASS, password);
       EEPROM.commit();
-
       setup_wifi();
-
+*/
     break;
     case 'Q':
-
+/*
       numSensor = valorParam.toInt();
       Serial.println("MQTT (numSensor): ");
       Serial.println(numSensor);
-
       if(numSensor >= 0 && numSensor <= 255){
-
         cambiarConfigMQTT(numSensor);
-
         //guarda en EEPROM el número de sensor
         EEPROM.write(0 + sizeof(double), numSensor);
         EEPROM.commit();
-
       }else{
-
         Serial.println("Número incorrecto. Se acepta entre 0 y 255");
-
       }
-
+*/
     break;
     case 'C':
 	/*
@@ -1365,12 +1422,10 @@ void switchCaseParametros(char charParamID, String valorParam){
     case 'S':
 	/*
       cantSensoresIR = valorParam.toInt();
-
       if(cantSensoresIR < 1 && cantSensoresIR > 3){//valida la cantidad declarada
         Serial.println("cantidad de sensoresIR incorrecta. Se configura a 1");
         cantSensoresIR = 1;
       }
-
       Serial.print("cantSensoresIR: ");
       Serial.println(cantSensoresIR);
       flagLecturaEmisividad = 1;//habilita para volver a leer la emisividad
@@ -1575,64 +1630,64 @@ void setupModoRed(void){
   
 
 }
-/*
-void probarNeopixel(void){
+// /*
+// void probarNeopixel(void){
 
-  //prueba de LEDs Neopixel
-  pixels.clear();
-  delay(20);
-  apagarNeopixel();
-  delay(20);
-  encenderNeopixel('R');
-  delay(timeLED);
-  apagarNeopixel();
-  delay(timeLED);
-  encenderNeopixel('G');
-  //encenderNeopixel('B');
-  delay(timeLED);
-  apagarNeopixel();
-  delay(timeLED);
-  encenderNeopixel('Y');
-  delay(timeLED);
-  apagarNeopixel();
-  delay(timeLED);
+//   //prueba de LEDs Neopixel
+//   pixels.clear();
+//   delay(20);
+//   apagarNeopixel();
+//   delay(20);
+//   encenderNeopixel('R');
+//   delay(timeLED);
+//   apagarNeopixel();
+//   delay(timeLED);
+//   encenderNeopixel('G');
+//   //encenderNeopixel('B');
+//   delay(timeLED);
+//   apagarNeopixel();
+//   delay(timeLED);
+//   encenderNeopixel('Y');
+//   delay(timeLED);
+//   apagarNeopixel();
+//   delay(timeLED);
 
-}
-*/
-void displayText(char letra){
+// }
+// */
+// void displayText(char letra){
 
-  int timeDisplayBienvenida = 1000;
+//   int timeDisplayBienvenida = 1000;
   
-  display.clearDisplay();
-  //Serial.println("HandTemp");
-  display.setFont(font1);
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
+//   display.clearDisplay();
+//   //Serial.println("HandTemp");
+//   display.setFont(font1);
+//   display.setTextSize(1);
+//   display.setTextColor(WHITE);
   
-  //display.clearDisplay();
-  if(letra == 'R'){
-    display.setCursor(20,20);
-    display.println("Recuperando");
-    display.println("conexion");
-  }else if(letra == '1'){
-    display.setCursor(10,20);
-    display.println("MODO RED");
-    display.println("conexion OK");
-  }else if(letra == '0'){
-    display.setCursor(5,20);
-    display.println("MODO LOCAL");
-    display.println("conexion no OK");
-  }
+//   //display.clearDisplay();
+//   if(letra == 'R'){
+//     display.setCursor(20,20);
+//     display.println("Recuperando");
+//     display.println("conexion");
+//   }else if(letra == '1'){
+//     display.setCursor(10,20);
+//     display.println("MODO RED");
+//     display.println("conexion OK");
+//   }else if(letra == '0'){
+//     display.setCursor(5,20);
+//     display.println("MODO LOCAL");
+//     display.println("conexion no OK");
+//   }
     
-  display.display();
-  delay(timeDisplayBienvenida);
-  // limpio el bufer para la proxima pantalla
-  display.clearDisplay();
-  display.setFont(mainFont);  
+//   display.display();
+//   delay(timeDisplayBienvenida);
+//   // limpio el bufer para la proxima pantalla
+//   display.clearDisplay();
+//   display.setFont(mainFont);  
 
-}
+// }
 
-void recvMsg(uint8_t *data, size_t len){
+void recvMsgWebSerial(uint8_t *data, size_t len){
   WebSerial.println("Received Data...");
   String d = "";
   for(int i=0; i < len; i++){
@@ -1647,6 +1702,7 @@ void recvMsg(uint8_t *data, size_t len){
   }
 }
 
+
 void setup_mqtt(void){
 
 	client1.setServer(mqtt_server, mqtt_port);//inicializa server en broker local
@@ -1660,15 +1716,123 @@ void setup_mqtt(void){
 	if(client1.connected()){//si logró reconectarse o ya estaba conectado
 		Serial.println("Conexión OK: Wifi y MQTT conectados");
 		Serial.println("MODO RED");
+    SerialBT.println("Conexión OK: Wifi y MQTT conectados");
+		SerialBT.println("MODO RED");
 		//flagCambioModoLocal = 0;//no hace falta cambiar a modo local
 		flagConexionOK = 1;
 		
 	}else{
 		Serial.println("Conexión Errónea: Wifi y MQTT no conectados");
 		Serial.println("MODO LOCAL...(temporal)");
+    SerialBT.println("Conexión Errónea: Wifi y MQTT no conectados");
+		SerialBT.println("MODO LOCAL...(temporal)");
 		//flagCambioModoLocal = 1;
 		//flagModoRed = 0;
 		flagConexionOK = 0;
 	}
+
+}
+/*
+// Handle what happens when you receive new messages
+void handleNewMessages(int numNewMessages) {
+	
+  Serial.println("handleNewMessages");
+  Serial.println(String(numNewMessages));
+  for (int i=0; i<numNewMessages; i++) {
+    // Chat id of the requester
+    String chat_id = String(bot.messages[i].chat_id);
+    if (chat_id != CHAT_ID){
+      bot.sendMessage(chat_id, "Unauthorized user", "");
+      continue;
+    }
+    
+    // Print the received message
+    String text = bot.messages[i].text;
+    Serial.println(text);
+    String from_name = bot.messages[i].from_name;
+    if (text == "/start") {
+      String welcome = "Welcome, " + from_name + ".\n";
+      welcome += "Use the following commands to control your outputs.\n\n";
+      welcome += "/led_on to turn GPIO ON \n";
+      welcome += "/led_off to turn GPIO OFF \n";
+      welcome += "/state to request current GPIO state \n";
+      bot.sendMessage(chat_id, welcome, "");
+    }
+    if (text == "/led_on") {
+      bot.sendMessage(chat_id, "LED state set to ON", "");
+      ledState = HIGH;
+      digitalWrite(ledPin, ledState);
+    }
+    
+    if (text == "/led_off") {
+      bot.sendMessage(chat_id, "LED state set to OFF", "");
+      ledState = LOW;
+      digitalWrite(ledPin, ledState);
+    }
+    
+    if (text == "/state") {
+      if (digitalRead(ledPin)){
+        bot.sendMessage(chat_id, "LED is ON", "");
+      }
+      else{
+        bot.sendMessage(chat_id, "LED is OFF", "");
+      }
+    }
+  }
+  
+}
+*/
+
+void setup_telegram(void){
+
+    myBot.setUpdateTime(1000);
+    myBot.setTelegramToken(token);
+
+    // Check if all things are ok
+    Serial.print("\nTest Telegram connection... ");
+    myBot.begin() ? Serial.println("OK") : Serial.println("NOK");
+
+    Serial.print("Bot name: @");
+    Serial.println(myBot.getBotName());
+
+}
+
+void chequearTelegram(void){
+
+  // local variable to store telegram message data
+  TBMessage msg;
+  
+  // if there is an incoming message...
+  if (myBot.getNewMessage(msg)) {
+    String msgText = msg.text;
+
+    if (msgText.equals("/light_on")) {                 // if the received message is "LIGHT ON"...
+      digitalWrite(LED_ONBOARD, HIGH);                          // turn on the LED (inverted logic!)
+      myBot.sendMessage(msg, "Light is now ON");       // notify the sender
+    }
+    else if (msgText.equals("/light_off")) {           // if the received message is "LIGHT OFF"...
+      digitalWrite(LED_ONBOARD, LOW);                          // turn off the led (inverted logic!)
+      myBot.sendMessage(msg, "Light is now OFF");       // notify the sender
+    }else if (msgText.equals("/parpadear")) {                 // if the received message is "LIGHT ON"...
+      digitalWrite(LED_ONBOARD, HIGH);
+	  delay(1000);                          // turn on the LED (inverted logic!)
+	  digitalWrite(LED_ONBOARD, LOW);
+	  delay(1000);
+	  digitalWrite(LED_ONBOARD, HIGH);
+	  delay(1000);                          // turn on the LED (inverted logic!)
+	  digitalWrite(LED_ONBOARD, LOW);
+	  delay(1000);
+      myBot.sendMessage(msg, "LED parpadeando");       // notify the sender
+    }
+    else {                                              // otherwise...
+      // generate the message for the sender
+      String reply;
+      reply = "Bienvenido" ;
+      reply += msg.sender.username;
+      reply += ".\nLos comandos aceptados son: \n";
+	  reply += "/light_on\n/light_off\n/parpadear";
+      myBot.sendMessage(msg, reply);                    // and send it
+    }
+  }
 
 }
