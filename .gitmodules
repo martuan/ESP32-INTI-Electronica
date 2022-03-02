@@ -1,0 +1,3 @@
+[submodule "keypad"]
+	path = keypad
+	url = git@github.com:luvitale/inti_bluetooth_controller
