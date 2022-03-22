@@ -42,8 +42,10 @@
   *  Permite interactuar desde un bot de Telegram
   *  Permite enviar y recibir mensajes desde un browser con WebSerial
 */
+/*
+2/01/22 https://www.teachmemicro.com/nodemcu-iot-weather-device/
+ */
 
-//Comentario 18/01/22
 #include <Arduino.h>
 #include <PubSubClient.h>
 // #include <Wire.h>
@@ -106,10 +108,10 @@ SSLClient client(base_client, TAs, (size_t)TAs_NUM, A0, 1, SSLClient::SSL_ERROR)
 AsyncTelegram2 myBot(client);
 //const char* ssid  =  "milton";     // SSID WiFi network
 //const char* pass  =  "paternal";     // Password  WiFi network
-//String ssid = "milton";
-//String password = "paternal";
-String ssid = "wifi01-ei";
-String password = "Ax32MnF1975-ReB";
+String ssid = "BSPOL";
+String password = "bsnonpol";
+//String ssid = "wifi01-ei";
+//String password = "Ax32MnF1975-ReB";
 
 const char* token =  "5021419842:AAGWdRxVtpBNxiWtD3oEDN_CIkK1LnuqefE";  // Telegram token
 
@@ -331,7 +333,6 @@ void IRAM_ATTR onTimer3() {
         contadorProceso3 = 0;//resetea el contador
         flagProceso3 = 1;//para chequear conexión con red wifi y broker
     }
-
     
 }
 
@@ -339,9 +340,6 @@ void IRAM_ATTR onTimer3() {
 //*************************************************************************
 // SETUP
 //*************************************************************************
-
-
-
 
 void setup() {
     
@@ -354,7 +352,6 @@ void setup() {
     macAdd = WiFi.macAddress();
     Serial.println( "MAC address: " + macAdd );
     SerialBT.println("MAC address: " + macAdd);
-
 
 
 	  client1.subscribe(root_topic_subscribe);
@@ -398,10 +395,7 @@ void setup() {
     serverWebSerial.begin();
 
     setup_telegram();// Set the Telegram bot properies
-  
-    
-      
-      
+     
 }
 
 
