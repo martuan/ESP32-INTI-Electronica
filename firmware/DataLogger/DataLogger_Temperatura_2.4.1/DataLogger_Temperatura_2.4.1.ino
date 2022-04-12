@@ -2,6 +2,7 @@
  * HADWARE: 
  * Pin de Chip Select para escribir el SD : Pin 5
  * Pulsador inicio ensayo: Pin 4
+ * Pulsador calibracion: Pin 13
  * Salida para activar electroválvula: Pin 25
  * Sensor de temperatura one wire: Pin 32
  * I2C :Pines SDA:21 y CLK:22
@@ -19,22 +20,23 @@ RTC_DS3231 rtc;
 // File myFile;
 #include "DHT.h"
 #include "FS.h"
+#include <EEPROM.h>
 
 #define DHTPIN 32     // Pin donde está conectado el sensor de temperatura 
 #define LED_BUILTIN 2
 #define sensorPresion1 34
 #define sensorPresion2 35
+#define pulsadorCalibracion 13  // Si bootea con el pulsador presionado entra en modo calibración de sensores de presión
 
 #define DHTTYPE DHT22        // Sensor DHT22
-//#define intervalo 1000      // Cantidad de milisegundos
-//#define segundosLimite 10   //Cantidad de segundos entre medición y registro de temperatura
 DHT dht(DHTPIN, DHTTYPE);
 
 #define CS 5       //Pin de Chip Select para escribir el SD
 #define pulsadorInicio 4
 #define activarElectrovalvula 25
+#define EEPROM_SIZE 420 //Se usaran 20 enteros => 4by * 20
 
-int archivoAbierto = 0; // En "1" se pudo abrir, en "0", No se pudo abrir
+//int archivoAbierto = 0; // En "1" se pudo abrir, en "0", No se pudo abrir
 
 void writeFile(fs::FS &fs, const char * path, const char * message){
     Serial.println();
@@ -68,12 +70,17 @@ void appendFile(fs::FS &fs, const char * path, const char * message){
     file.close();
 }
 
+void calibracionSensoresPresion(void);
+void  leerEEPROM(void);
+
 void setup() {
 
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(pulsadorInicio, INPUT);
   pinMode(activarElectrovalvula, OUTPUT);
-  
+  pinMode(pulsadorCalibracion, INPUT);
+
+  boolean calibracion;
   //********************************************
   // Open serial communications and wait for port to open:
   Serial.begin(115200);
@@ -114,21 +121,143 @@ void setup() {
   //****************************************************
     dht.begin();    //Inicializar sensor de temperatura
  // dht.setup(dhtPin, DHTesp::DHT11);
+  EEPROM.begin(EEPROM_SIZE);
+  
+  leerEEPROM();
 }
+//******************************************************************************************************************
+void  leerEEPROM(){
+  //Read data from eeprom
+  int address = 0;
+  int cont = 0;
+  int readId;
+  while(cont<10){
+    readId = EEPROM.readInt(address); //EEPROM.get(address,readId);
+    Serial.print("Read m = ");
+    Serial.println(readId);
+    address += sizeof(readId); //update address value  
+    readId = EEPROM.readInt(address); //EEPROM.get(address,readId);
+    Serial.print("Read b = ");
+    Serial.println(readId);
+    address += sizeof(readId); //update address value  
+    cont ++;    
+  }
+}
+//******* Calibración ***********************************************************************
+void calibracionSensoresPresion(){
+      int numeroSensor = 1;
+      int puntoCalibracion = 0;
+      int valorAcumulado = 0;
+      int promedio;
+      int valorDigitalCalibrado[10];
+      const float valorCalibracion[10] = {0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00, 2.25, 2.50};
+      int m = 0;
+      int b = 0;
+      int muestraPorPunto = 0;
+      int addressEEPROM = 0;
+      int cont = 0;
+     int readId; 
+      boolean inicio = HIGH;
+      boolean calibracion;
+      boolean cambioSensor = LOW; 
+      Serial.println("Con pulsador CALIBRACION seleccione sensor: ");
+      Serial.print("Sensor seleccionado: ");
+      Serial.println(numeroSensor);
+      Serial.println("Pulse INICIO para comenzar calibración");        
+      delay(600); 
+      while(inicio == HIGH){
+      calibracion = digitalRead(pulsadorCalibracion);
+      if(calibracion == LOW){
+        if(numeroSensor == 1){
+        numeroSensor = 2;
+        }else{
+        numeroSensor = 1;         
+        }
+        delay(600);  
+        cambioSensor = HIGH;      
+      }
+      if(cambioSensor == HIGH){
+        Serial.print("Sensor seleccionado: ");
+        Serial.println(numeroSensor);
+        Serial.println("Pulse INICIO para comenzar calibración");    
+        cambioSensor = LOW;       
+      }
+      inicio = digitalRead(pulsadorInicio);
+     }
+     delay(1000);
+     while(puntoCalibracion < 10){
 
+      while(muestraPorPunto < 3){
+        Serial.print(muestraPorPunto + 1);
+        Serial.print("º. Desde Cero suba la presión hasta ");
+        Serial.print(valorCalibracion[puntoCalibracion]);
+        Serial.println("kPa  y presione INICIO");
+        inicio = digitalRead(pulsadorInicio);
+        while(inicio == HIGH){
+          inicio = digitalRead(pulsadorInicio);
+          }
+        valorAcumulado = analogRead(sensorPresion1) + valorAcumulado;
+        promedio = valorAcumulado / 3;
+        muestraPorPunto ++;
+        delay(600);
+        }
+      muestraPorPunto = 0;
+      valorDigitalCalibrado[puntoCalibracion] = promedio;
+      valorAcumulado = 0;
+      puntoCalibracion ++;
+     }
+     
+      m = int((valorDigitalCalibrado[1] - valorDigitalCalibrado[0])/0.25);
+//      m = int((valorDigitalCalibrado[1] - valorDigitalCalibrado[0])/(valorCalibracion[1] - valorCalibracion[0]));
+      b = int(valorDigitalCalibrado[0] - m*valorCalibracion[0]);
+      Serial.print("Valor m: ");
+      Serial.println(m);
+      Serial.print("Valor b: ");
+      Serial.println(b);
+
+      EEPROM.writeInt(addressEEPROM, m);       //Escribir en EEPROM m y b en posicion 0
+      EEPROM.commit();
+      addressEEPROM += sizeof(m); //update address value
+      EEPROM.writeInt(addressEEPROM, b);       //Escribir en EEPROM m y b en posicion 0
+      EEPROM.commit();
+      addressEEPROM += sizeof(b); //update address value
+
+     while(cont<9){
+//      m = int((valorDigitalCalibrado[cont+1] - valorDigitalCalibrado[cont])/(valorCalibracion[cont+1] - valorCalibracion[cont]));
+      m = int((valorDigitalCalibrado[cont+1] - valorDigitalCalibrado[cont])/0.25);
+      b = int(valorDigitalCalibrado[cont] - m*valorCalibracion[cont]);
+      Serial.print("Valor Digital Calibrado cont + 1: ");
+      Serial.println(valorDigitalCalibrado[cont+1]);
+      Serial.print("Valor Digital Calibrado cont: ");
+      Serial.println(valorDigitalCalibrado[cont]);
+      Serial.print("Valor m: ");
+      Serial.println(m);
+      Serial.print("Valor b: ");
+      Serial.println(b);
+      EEPROM.writeInt(addressEEPROM, m);       //Escribir en EEPROM m y b en posicion 0
+      EEPROM.commit();
+   readId = EEPROM.readInt(addressEEPROM); //EEPROM.get(address,readId);
+    Serial.print("Read EEPROM m = ");
+    Serial.println(readId);
+      addressEEPROM += sizeof(m); //update address value
+      EEPROM.writeInt(addressEEPROM, b);       //Escribir en EEPROM m y b en posicion 0
+      EEPROM.commit();
+   readId = EEPROM.readInt(addressEEPROM); //EEPROM.get(address,readId);
+    Serial.print("Read EEPROM b = ");
+    Serial.println(readId);
+      addressEEPROM += sizeof(b); //update address value
+      //Escribir en EEPROM m y b ()
+      cont ++;
+     }
+     leerEEPROM();  
+}
+//******************** Fin calibración ************************************************************
   void imprimirPC(DateTime now, float temp, float humed){
+      char dateTime[22];
+      char tempHumed[46];
+      sprintf(dateTime, "%02d/%02d/%02d %02d:%02d:%02d", now.year(), now.month(),now.day(),  now.hour(), now.minute(), now.second()); 
       Serial.println("Fecha y hora: ");
-      Serial.print(now.year(), DEC);
-      Serial.print('/');
-      Serial.print(now.month(), DEC);
-      Serial.print('/');
-      Serial.print(now.day(), DEC);
-      Serial.print("   ");
-      Serial.print(now.hour(), DEC);
-      Serial.print(':');
-      Serial.print(now.minute(), DEC);
-      Serial.print(':');
-      Serial.print(now.second(), DEC);
+      Serial.print(dateTime);
       Serial.println();
       Serial.print("Temperatura: ");
       Serial.print(temp);
@@ -168,8 +297,45 @@ boolean  tiempoTranscurrido(boolean ejecutado){
 float obtenerPresion1(void){
   int lecturaAD1;
   float presion1;
+  int b, m;
+  int address = 0;
+  int cont = 0;
+  int readId, ultimaLecturaEEPROM = 1;
+
   lecturaAD1 = analogRead(sensorPresion1);
-  presion1 = (lecturaAD1*10)/4096;
+    Serial.print("Lectura AD = ");
+    Serial.println(lecturaAD1);
+   
+  ultimaLecturaEEPROM = 9;
+  if(lecturaAD1 < 1220) { ultimaLecturaEEPROM = 8; }
+  if(lecturaAD1 < 1075) { ultimaLecturaEEPROM = 7; }
+  if(lecturaAD1 < 800) { ultimaLecturaEEPROM = 5; }
+  if(lecturaAD1 < 937) { ultimaLecturaEEPROM = 6; }
+  if(lecturaAD1 < 680) { ultimaLecturaEEPROM = 4; }
+  if(lecturaAD1 < 560) { ultimaLecturaEEPROM =3; }
+  if(lecturaAD1 < 440) { ultimaLecturaEEPROM = 2; }
+  if(lecturaAD1 < 320) { ultimaLecturaEEPROM = 1; }
+//    Serial.print("ultimaLecturaEEPROM = ");
+//    Serial.println(ultimaLecturaEEPROM);
+
+  while(cont < ultimaLecturaEEPROM){
+    m = EEPROM.read(address); //EEPROM.get(address,readId);
+    address += sizeof(m); //update address value  
+    b = EEPROM.read(address); //EEPROM.get(address,readId);
+    address += sizeof(b); //update address value  
+    cont ++;    
+  }
+    Serial.print("Read m = ");
+    Serial.println(m);
+    Serial.print("Read b = ");
+    Serial.println(b);
+  m = 555;
+  b = -40 ;
+  presion1 = (float(lecturaAD1) - float(b))/float(m);
+ 
+  if(presion1 < 0)  presion1 = 0;
+   Serial.print("Valor presion = ");
+    Serial.println(presion1);
 
   return presion1;
 }
@@ -182,13 +348,17 @@ void rutinaEnsayo(String nombreArchivo){
   float presion1 = 0;
   float presion1Anterior = 0;
   boolean registrarDatos = false;
+  int presion1PartEntera = 0;
+  int presion1Partdecimal = 0;
 
   digitalWrite(activarElectrovalvula, HIGH);
   while(segundos < timeOut){
     registrarDatos = tiempoTranscurrido(false);
     if(registrarDatos){
        presion1 = obtenerPresion1();
-       sprintf(medicion, "%d.%02d", (int)presion1, (int)(fabs(presion1)*100)/100);
+       presion1PartEntera = int(presion1);
+       presion1Partdecimal = int((presion1 - presion1PartEntera) * 100);
+       sprintf(medicion, "%d.%02d", (int)presion1, presion1Partdecimal);
        lineaMedicion += String(segundos);
        lineaMedicion += ",  ";
        lineaMedicion += String(medicion);
@@ -242,6 +412,7 @@ String rutinaInicioEnsayo(){
   
 void loop() {
   boolean tiempoCumplido;
+  boolean calibracion;
   String inicio = "";           //Cuando se inicia la placa Impacto envía al inicio de la comunicación "ini")
   static unsigned long previousMillis = 0;
   static unsigned long currentMillis = 0;
@@ -251,6 +422,8 @@ void loop() {
   while (Serial.available() > 0) {    // Es para lectura del puerto serie
  
   }
+  calibracion = digitalRead(pulsadorCalibracion);
+  if(!calibracion)  calibracionSensoresPresion();
 
  
    estadoPulsadorInicio = digitalRead(pulsadorInicio);
