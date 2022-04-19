@@ -17,7 +17,6 @@
 RTC_DS3231 rtc;
 #include <SPI.h>
 #include <SD.h>
-// File myFile;
 #include "DHT.h"
 #include "FS.h"
 #include <EEPROM.h>
@@ -40,13 +39,15 @@ DHT dht(DHTPIN, DHTTYPE);
                                                               //que el valor se mantenga en este rango durante el ensayo. 
 #define addressEEPROM_1kPa  80  //Guarda el valor del AD para 1kPa en el sensor 2 (Fuelle)
 #define addressEEPROM_2kPa  84  //Guarda el valor del AD para 2kPa en el sensor 2 (Fuelle)
+#define NUMERO_MAQUINA 1
+
 
 //Rutina que crea en archivo de registro de nuevo ensayo, lo nombra según formato ISO8601 y Escribe dentro de el el encabezado del ensayo
 void writeFile(fs::FS &fs, const char * path, const char * message){
     Serial.println();
     Serial.printf("Writing file: %s\n", path);
-
-    File file = fs.open(path, FILE_APPEND);
+  
+  File file = fs.open(path, FILE_APPEND);
     if(!file){
         Serial.println("Failed to open file for appending");
         return;
@@ -126,8 +127,15 @@ void setup() {
     dht.begin();    //Inicializar sensor de temperatura
  // dht.setup(dhtPin, DHTesp::DHT11);
   EEPROM.begin(EEPROM_SIZE);
-  
   leerEEPROM();
+  
+  String str = "/Maquina_";              //El nombre del archivo corresponde al número de máquina
+  str += String(NUMERO_MAQUINA);
+  File archivo = SD.open(str.c_str());   //Si no existe el archivo lo crea. Aqui se guardan el último dato de cada ensayo ya sea, tiempo y presión de reventado, 
+  if(!archivo) {                              //fin por timeout, presión de fuelle fuera de rango o parada por usuario (pulsador inicio)
+  writeFile(SD, str.c_str(), "Nombre archivo, Segundos, Estado final\r");
+  }    
+
 }
 //******************************************************************************************************************
 void  leerEEPROM(){
@@ -355,24 +363,32 @@ void rutinaEnsayo(String nombreArchivo){
   char medicion[5];
   String lineaMedicion = "";
   String lineaMedicionAnterior = ""; 
+  String ultimasMediciones = "/UltimasMediciones.csv";
+  String escribeUltimaMedicion = "";
   float presion1 = 0;               //Presión medida en preservativo
   float presion1Anterior = 0;       //Presión medida en el ciclo anterior en preservativo
   boolean registrarDatos = LOW;
   int presion1PartEntera = 0;       //Separo el valor real de presión para poder meterlo en un String
   int presion1Partdecimal = 0;      //Separo el valor real de presión para poder meterlo en un String
-  int valoAD_minimo_fuelle, valoAD_maximo_fuelle;
+  int valorAD_minimo_fuelle, valorAD_maximo_fuelle;
   boolean inicio = HIGH;            //Para verificar s se presionó el pulsador INICIO durante el ensayo y detener el mismo (parada de emergencia)
   int valorAD_fuelle = 0;
   boolean bajaPresionFuelle = LOW;
   boolean altaPresionFuelle = LOW;
-  boolean guardarLineaMedicionAnterior = false;
-  
+  boolean guardarLineaMedicionAnterior = false;   //Sirve para registrar la máxima presión alcanzada antes de la ruptura.
+  boolean superoPresionMinima = false;            //Por debajo de 0.1 kPa tiene mucho error y no se considera la medicion.
+  String nombreMaquina = "/Maquina_";              
+  nombreMaquina += String(NUMERO_MAQUINA);        //El nombre del archivo corresponde al número de máquina
+
+  valorAD_minimo_fuelle = EEPROM.readInt(addressEEPROM_1kPa); //Valor de presión mínimo (en entero del AD) en el fuelle (sensor de presión 2)   
+  valorAD_maximo_fuelle = EEPROM.readInt(addressEEPROM_2kPa); //Valor de presión máximo (en entero del AD) en el fuelle (sensor de presión 2) 
+
   digitalWrite(activarElectrovalvula, HIGH);
   while(segundos < timeOut){
     registrarDatos = tiempoTranscurrido(false);
     if(registrarDatos){
-       presion1 = obtenerPresion1();
-       presion1PartEntera = int(presion1);
+       presion1 = obtenerPresion1();            //Se obtiene la presión en el preservativo
+       presion1PartEntera = int(presion1);      //sprintf no formatea float, entonces separo partes entera y decimal
        presion1Partdecimal = int((presion1 - presion1PartEntera) * 100);
        sprintf(medicion, "%d.%02d", (int)presion1, presion1Partdecimal);
        lineaMedicion += String(segundos);
@@ -380,73 +396,76 @@ void rutinaEnsayo(String nombreArchivo){
        lineaMedicion += String(medicion);
        lineaMedicion += "\r";
        appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());   
- //      lineaMedicionAnterior = lineaMedicion;
        segundos ++;
        Serial.println(lineaMedicion);
-//       lineaMedicion = "";
        registrarDatos = tiempoTranscurrido(true);
        guardarLineaMedicionAnterior = true;
    }
-   if(presion1 < (presion1Anterior * 0.6)){
-       nombreArchivo.remove(16,4);
-       nombreArchivo += "_UM.csv";    //Genero otro archivo que contenga solamente el última medición y el nombre del archivo es el mismo al del ensayo mas _UV (último valor)
-       writeFile(SD, nombreArchivo.c_str(), lineaMedicionAnterior.c_str());
-       segundos = timeOut + 1; //No vuenve a entrar en  while(segundos < timeOut) ni entra en if(segundos == timeOut)
-     Serial.print("Linea Medición anterior: ");
-     Serial.println(lineaMedicionAnterior);
+   if(presion1 > 0.1)  { superoPresionMinima = true; }
+   if(superoPresionMinima == true){
+       if(presion1 < (presion1Anterior * 0.6)){       //Si la presión cae un 40% se asume que el preservativo reventó
+          escribeUltimaMedicion += nombreArchivo;
+          escribeUltimaMedicion += ", ";
+          escribeUltimaMedicion += lineaMedicionAnterior;
+          
+          appendFile(SD, nombreMaquina.c_str(), escribeUltimaMedicion.c_str());
+          segundos = timeOut + 1;       //No vuenve a entrar en  while(segundos < timeOut) ni entra en if(segundos == timeOut)
+         Serial.print("Linea Medición anterior: ");
+         Serial.println(lineaMedicionAnterior);
+       }    
    }
-  if(guardarLineaMedicionAnterior == true){
+   
+  if(guardarLineaMedicionAnterior == true){   //Sirve para guardar la máxima presión en el preservativo antes del reventado
      presion1Anterior = presion1;
      lineaMedicionAnterior = " ";
      lineaMedicionAnterior += lineaMedicion;
      guardarLineaMedicionAnterior = false;
   }
    lineaMedicion = "";
+    lineaMedicion += nombreArchivo; 
+    lineaMedicion += ", ";
+    lineaMedicion += String(segundos);
+    lineaMedicion += ", ";
   
    if(segundos == timeOut){
-      lineaMedicion = "Fin de ensayo por Time Out \r"; 
+      lineaMedicion += "Fin de ensayo por Time Out \r"; 
       appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());    
       Serial.println("Fin de ensayo por Time Out");
-      nombreArchivo.remove(16,4);
-      nombreArchivo += "_UM.csv";    //Genero otro archivo que contenga solamente el última medición y el nombre del archivo es el mismo al del ensayo mas _UV (último valor)
-      writeFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());
+      appendFile(SD, nombreMaquina.c_str(), lineaMedicion.c_str());
    }     
    
    inicio = digitalRead(pulsadorInicio);
    if(inicio == LOW){
-      lineaMedicion = "Fin de ensayo por parada de usuario \r"; 
+      lineaMedicion += "Fin de ensayo por parada de usuario \r"; 
       appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());    
       Serial.println("Fin de ensayo por parada de usuario");
-      nombreArchivo.remove(16,4);
-      nombreArchivo += "_UM.csv";    //Genero otro archivo que contenga solamente el última medición y el nombre del archivo es el mismo al del ensayo mas _UV (último valor)
-      writeFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());
+      appendFile(SD, nombreMaquina.c_str(), lineaMedicion.c_str());
       segundos = timeOut + 1;
+      digitalWrite(activarElectrovalvula, LOW);
       delay(1500);
    }
 
-    valoAD_minimo_fuelle = EEPROM.readInt(addressEEPROM_1kPa); //Valor de presión mínimo (en entero del AD) en el fuelle (sensor de presión 2)   
-    valoAD_maximo_fuelle = EEPROM.readInt(addressEEPROM_2kPa); //Valor de presión máximo (en entero del AD) en el fuelle (sensor de presión 2) 
     valorAD_fuelle = analogRead(sensorPresion2);
-    if(valorAD_fuelle < valoAD_minimo_fuelle)   bajaPresionFuelle = HIGH;
-    if(valorAD_fuelle > valoAD_maximo_fuelle)   altaPresionFuelle = HIGH;
+    if(valorAD_fuelle < valorAD_minimo_fuelle)   bajaPresionFuelle = HIGH;
+    if(valorAD_fuelle > valorAD_maximo_fuelle)   altaPresionFuelle = HIGH;
+
     if(bajaPresionFuelle == HIGH){
-      lineaMedicion = "Fin de ensayo por baja presión en fuelle \r"; 
+      lineaMedicion += "Fin de ensayo por baja presión en fuelle \r"; 
       appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());    
       Serial.println("Fin de ensayo por baja presión en fuelle");
-      nombreArchivo += "_UV";    //Genero otro archivo que contenga solamente el último valor y el nombre del archivo es el mismo al del ensayo mas _UV (último valor)
-      writeFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());
+      appendFile(SD, nombreMaquina.c_str(), lineaMedicion.c_str());
       segundos = timeOut + 1;
       delay(300);
-   }
+    }
     if(altaPresionFuelle == HIGH){
-      lineaMedicion = "Fin de ensayo por alta presión en fuelle \r"; 
+      lineaMedicion += "Fin de ensayo por alta presión en fuelle \r"; 
       appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());    
       Serial.println("Fin de ensayo por alta presión en fuelle");
-      nombreArchivo += "_UV";    //Genero otro archivo que contenga solamente el último valor y el nombre del archivo es el mismo al del ensayo mas _UV (último valor)
-      writeFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());
+      appendFile(SD, nombreMaquina.c_str(), lineaMedicion.c_str());
       segundos = timeOut + 1;
       delay(300);
-   }
+    }
+    lineaMedicion = "";
   }
   digitalWrite(activarElectrovalvula, LOW);
 }
