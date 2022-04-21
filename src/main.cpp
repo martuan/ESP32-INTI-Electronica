@@ -87,7 +87,7 @@ void setup() {
   sensorTemp.descriptor = "Mide temperatura, humedad y presion";
   sensorTemp.url_broker = "rbpi-electronica01-wifi.inti.gob.ar";//"broker.hivemq.com";
   sensorTemp.id = "sensorTemp_0001";
-  sensorTemp.topic = " prueba/user1/dataloggerINTI42";// "labo_inteligente/temperatura/"+ sensorTemp.id;  
+  sensorTemp.topic = "prueba/user1/dataloggerINTI42";// "labo_inteligente/temperatura/"+ sensorTemp.id;  
 
   conexion.ssid = sensorTemp.SSID;
   conexion.password = sensorTemp.Password;

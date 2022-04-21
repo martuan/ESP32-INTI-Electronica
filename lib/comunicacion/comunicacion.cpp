@@ -108,8 +108,8 @@ void Network::setup_mqtt(String broker, String topic){
     strcpy(mqtt_server, broker.c_str());
 
     //mqtt_port = 1883;//port
-    mqtt_user = "pentium";//user
-    mqtt_pass = "7364";//pass
+    mqtt_user = "user1";//"pentium";//user
+    mqtt_pass = "clave1";//"7364";//pass
 
     
     strcpy(root_topic_subscribe, topic.c_str());
