@@ -8,8 +8,13 @@
  * I2C :Pines SDA:21 y CLK:22
  * Sensor de presión 1 (entrada analógica): Pin 34
  * Sensor de presión 2 (entrada analógica): Pin 35
+ * SOFTWARE
  18/03/22 -> Se genera un archivo cada vez que se presiona el pulsador se genera un archivo .csv para almacenar los datos cuyo nombre 
  se crea en formato ISO8601 hora local (yyyymmddThhmmss), tomando fecha y hora del RTC
+ Se genera un archivo donde se almacenan el último valor de cada ensayo (se crea una vez si no existe) con el nombre Maquina_<NUMERO_MAQUINA>.csv . Cada máquina de ensayos tendrá su número
+ 
+ Se puede setear el reloj de tiempo real (RTC) desde el puerto serie (115200 baud, 8 bits, sin paridad, un stop bit. Enviar setRTC:año mes dia hora minutos segundos (todo junto sin espacios)
+ Ej.:Comando por puero serie: setRTC:20210213163218  -> año:2021, mes: 02, día: 13, hora: 16, minutos: 32, segundos: 18
 */
 
 #include <Wire.h>
@@ -17,7 +22,6 @@
 RTC_DS3231 rtc;
 #include <SPI.h>
 #include <SD.h>
-// File myFile;
 #include "DHT.h"
 #include "FS.h"
 #include <EEPROM.h>
@@ -40,13 +44,15 @@ DHT dht(DHTPIN, DHTTYPE);
                                                               //que el valor se mantenga en este rango durante el ensayo. 
 #define addressEEPROM_1kPa  80  //Guarda el valor del AD para 1kPa en el sensor 2 (Fuelle)
 #define addressEEPROM_2kPa  84  //Guarda el valor del AD para 2kPa en el sensor 2 (Fuelle)
+#define NUMERO_MAQUINA 1
+
 
 //Rutina que crea en archivo de registro de nuevo ensayo, lo nombra según formato ISO8601 y Escribe dentro de el el encabezado del ensayo
 void writeFile(fs::FS &fs, const char * path, const char * message){
     Serial.println();
     Serial.printf("Writing file: %s\n", path);
-
-    File file = fs.open(path, FILE_APPEND);
+  
+  File file = fs.open(path, FILE_APPEND);
     if(!file){
         Serial.println("Failed to open file for appending");
         return;
@@ -117,8 +123,6 @@ void setup() {
     while (1);
   }
 
-  //rtc.adjust(DateTime(__DATE__, __TIME__)); // which will set the time according to our PC time.
-
   if (rtc.lostPower()) {
     //    Serial.println("RTC lost power, lets set the time!");
   }
@@ -126,8 +130,15 @@ void setup() {
     dht.begin();    //Inicializar sensor de temperatura
  // dht.setup(dhtPin, DHTesp::DHT11);
   EEPROM.begin(EEPROM_SIZE);
-  
   leerEEPROM();
+  
+  String str = "/Maquina_";              //El nombre del archivo corresponde al número de máquina
+  str += String(NUMERO_MAQUINA);
+  File archivo = SD.open(str.c_str());   //Si no existe el archivo lo crea. Aqui se guardan el último dato de cada ensayo ya sea, tiempo y presión de reventado, 
+  if(!archivo) {                              //fin por timeout, presión de fuelle fuera de rango o parada por usuario (pulsador inicio)
+  writeFile(SD, str.c_str(), "Nombre archivo, Segundos, Estado final\r");
+  }    
+
 }
 //******************************************************************************************************************
 void  leerEEPROM(){
@@ -321,7 +332,7 @@ float obtenerPresion1(void){
 
   lecturaAD1 = analogRead(sensorPresion1);
    
-  ultimaLecturaEEPROM = 9;
+  ultimaLecturaEEPROM = 9;  //En función de la lectura del AD, se determina que datos de calibración utiluzar
   if(lecturaAD1 < 1220) { ultimaLecturaEEPROM = 8; }
   if(lecturaAD1 < 1075) { ultimaLecturaEEPROM = 7; }
   if(lecturaAD1 < 800) { ultimaLecturaEEPROM = 5; }
@@ -332,16 +343,13 @@ float obtenerPresion1(void){
   if(lecturaAD1 < 320) { ultimaLecturaEEPROM = 1; }
 
   while(cont < ultimaLecturaEEPROM){
-    m = EEPROM.readInt(address); //
+    m = EEPROM.readInt(address); //Se lee la pendiente guardada durante la calibración
     address += sizeof(m); //update address value  
-    b = EEPROM.readInt(address); //
+    b = EEPROM.readInt(address); //Se lee la pendiente guardada durante la calibración
     address += sizeof(b); //update address value  
     cont ++;    
   }
- /*   Serial.print("Read m = ");
-    Serial.println(m);
-    Serial.print("Read b = ");
-    Serial.println(b);*/
+
   presion1 = (float(lecturaAD1) - float(b))/float(m);
  
   if(presion1 < 0)  presion1 = 0;
@@ -354,10 +362,12 @@ void rutinaEnsayo(String nombreArchivo){
   int segundos = 0;
   char medicion[5];
   String lineaMedicion = "";
-  String lineaMedicionAnterior = ""; 
+  String lineaMedicionAnterior = "";  //Para no guardar en Maquina_1.csv el valor de presión durante loa caída. Interesa guardar la máxima antes del reventado
+  String lineaMedicionNombreArchivo = ""; //Para escribir la última medición en Maquina_1 incluyendo el nombre del archivo
+  String escribeUltimaMedicion = "";  //Sirve para registrar la máxima presión alcanzada antes de la ruptura.
   float presion1 = 0;               //Presión medida en preservativo
   float presion1Anterior = 0;       //Presión medida en el ciclo anterior en preservativo
-  boolean registrarDatos = LOW;
+  boolean registrarDatos = LOW;     //Se pone en HIGH cuando la función tiempoTranscurrido() indica el momento de tomar medición, para no usar delay() bloqueante
   int presion1PartEntera = 0;       //Separo el valor real de presión para poder meterlo en un String
   int presion1Partdecimal = 0;      //Separo el valor real de presión para poder meterlo en un String
   int valorAD_minimo_fuelle, valorAD_maximo_fuelle;
@@ -366,6 +376,11 @@ void rutinaEnsayo(String nombreArchivo){
   boolean bajaPresionFuelle = LOW;
   boolean altaPresionFuelle = LOW;
   boolean guardarLineaMedicionAnterior = false;   //Sirve para registrar la máxima presión alcanzada antes de la ruptura.
+  boolean superoPresionMinima = false;            //Por debajo de 0.1 kPa tiene mucho error y no se considera la medicion.
+  String nombreMaquina = "/Maquina_";   
+             
+  nombreMaquina += String(NUMERO_MAQUINA);        //El nombre del archivo corresponde al número de máquina
+  nombreMaquina += ".csv";
 
   valorAD_minimo_fuelle = EEPROM.readInt(addressEEPROM_1kPa); //Valor de presión mínimo (en entero del AD) en el fuelle (sensor de presión 2)   
   valorAD_maximo_fuelle = EEPROM.readInt(addressEEPROM_2kPa); //Valor de presión máximo (en entero del AD) en el fuelle (sensor de presión 2) 
@@ -381,23 +396,28 @@ void rutinaEnsayo(String nombreArchivo){
        lineaMedicion += String(segundos);
        lineaMedicion += ",  ";
        lineaMedicion += String(medicion);
-       lineaMedicion += "\r";
+       lineaMedicion += "\r\n";
+       Serial.print(lineaMedicion);         //Si se quita el envío al puerto serie, agregar delay(10) para que escriba bien en la sd el fin de línea
        appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());   
- //      lineaMedicionAnterior = lineaMedicion;
        segundos ++;
-       Serial.println(lineaMedicion);
-//       lineaMedicion = "";
+//       Serial.println(lineaMedicion);
        registrarDatos = tiempoTranscurrido(true);
        guardarLineaMedicionAnterior = true;
    }
-   if(presion1 < (presion1Anterior * 0.6)){       //Si la presión cae un 40% se asume que el preservativo reventó
-       nombreArchivo.remove(16,4);
-       nombreArchivo += "_UM.csv";    //Genero otro archivo que contenga solamente el última medición y el nombre del archivo es el mismo al del ensayo mas _UV (último valor)
-       writeFile(SD, nombreArchivo.c_str(), lineaMedicionAnterior.c_str());
-       segundos = timeOut + 1; //No vuenve a entrar en  while(segundos < timeOut) ni entra en if(segundos == timeOut)
-     Serial.print("Linea Medición anterior: ");
-     Serial.println(lineaMedicionAnterior);
+   if(presion1 > 0.1)  { superoPresionMinima = true; }
+   if(superoPresionMinima == true){
+       if(presion1 < (presion1Anterior * 0.6)){       //Si la presión cae un 40% se asume que el preservativo reventó
+          escribeUltimaMedicion += nombreArchivo;
+          escribeUltimaMedicion += ", ";
+          escribeUltimaMedicion += lineaMedicionAnterior;
+          
+          appendFile(SD, nombreMaquina.c_str(), escribeUltimaMedicion.c_str());
+          segundos = timeOut + 1;       //No vuenve a entrar en  while(segundos < timeOut) ni entra en if(segundos == timeOut)
+         Serial.print("Linea Medición anterior: ");
+         Serial.println(lineaMedicionAnterior);
+       }    
    }
+   
   if(guardarLineaMedicionAnterior == true){   //Sirve para guardar la máxima presión en el preservativo antes del reventado
      presion1Anterior = presion1;
      lineaMedicionAnterior = " ";
@@ -405,49 +425,58 @@ void rutinaEnsayo(String nombreArchivo){
      guardarLineaMedicionAnterior = false;
   }
    lineaMedicion = "";
-  
+   lineaMedicion += String(segundos);
+   lineaMedicion += ", ";
+
+   lineaMedicionNombreArchivo = "";
+   lineaMedicionNombreArchivo += nombreArchivo; 
+   lineaMedicionNombreArchivo += ", ";
+   lineaMedicionNombreArchivo += String(segundos);
+   lineaMedicionNombreArchivo += ", ";
+
    if(segundos == timeOut){
-      lineaMedicion = "Fin de ensayo por Time Out \r"; 
+      lineaMedicion += "Fin de ensayo por Time Out \r\n"; 
+      lineaMedicionNombreArchivo += "Fin de ensayo por Time Out \r\n"; 
       appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());    
       Serial.println("Fin de ensayo por Time Out");
-      nombreArchivo.remove(16,4);
-      nombreArchivo += "_UM.csv";    //Genero otro archivo que contenga solamente el última medición y el nombre del archivo es el mismo al del ensayo mas _UV (último valor)
-      writeFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());
+      appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());
    }     
    
    inicio = digitalRead(pulsadorInicio);
    if(inicio == LOW){
-      lineaMedicion = "Fin de ensayo por parada de usuario \r"; 
+      lineaMedicion += "Fin de ensayo por parada de usuario \r\n"; 
+      lineaMedicionNombreArchivo += "Fin de ensayo por parada de usuario \r\n"; 
       appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());    
       Serial.println("Fin de ensayo por parada de usuario");
-      nombreArchivo.remove(16,4);
-      nombreArchivo += "_UM.csv";    //Genero otro archivo que contenga solamente el última medición y el nombre del archivo es el mismo al del ensayo mas _UV (último valor)
-      writeFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());
+      appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());
       segundos = timeOut + 1;
+      digitalWrite(activarElectrovalvula, LOW);
       delay(1500);
    }
 
     valorAD_fuelle = analogRead(sensorPresion2);
     if(valorAD_fuelle < valorAD_minimo_fuelle)   bajaPresionFuelle = HIGH;
     if(valorAD_fuelle > valorAD_maximo_fuelle)   altaPresionFuelle = HIGH;
+
     if(bajaPresionFuelle == HIGH){
-      lineaMedicion = "Fin de ensayo por baja presión en fuelle \r"; 
+      lineaMedicion += "Fin de ensayo por baja presión en fuelle \r\n"; 
+      lineaMedicionNombreArchivo += "Fin de ensayo por baja presión en fuelle \r\n"; 
       appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());    
       Serial.println("Fin de ensayo por baja presión en fuelle");
-      nombreArchivo += "_UV";    //Genero otro archivo que contenga solamente el último valor y el nombre del archivo es el mismo al del ensayo mas _UV (último valor)
-      writeFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());
+      appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());
       segundos = timeOut + 1;
       delay(300);
-   }
+    }
     if(altaPresionFuelle == HIGH){
-      lineaMedicion = "Fin de ensayo por alta presión en fuelle \r"; 
+      lineaMedicion += "Fin de ensayo por alta presión en fuelle \r\n"; 
+      lineaMedicionNombreArchivo += "Fin de ensayo por alta presión en fuelle \r\n"; 
       appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());    
       Serial.println("Fin de ensayo por alta presión en fuelle");
-      nombreArchivo += "_UV";    //Genero otro archivo que contenga solamente el último valor y el nombre del archivo es el mismo al del ensayo mas _UV (último valor)
-      writeFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());
+      appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());
       segundos = timeOut + 1;
       delay(300);
-   }
+    }
+    lineaMedicion = "";
   }
   digitalWrite(activarElectrovalvula, LOW);
 }
@@ -482,18 +511,105 @@ String rutinaInicioEnsayo(){
 
   return str; 
 }
+//**************************************************************************************************
+void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
+  Serial.printf("Listado de directorio: %s\n", dirname);
+
+  File root = fs.open(dirname);
+  if(!root){
+    Serial.println("Failed to open directory");
+    return;
+  }
+  if(!root.isDirectory()){
+    Serial.println("Not a directory");
+    return;
+  }
+
+  File file = root.openNextFile();
+  while(file){
+    if(file.isDirectory()){
+      Serial.print("  DIR : ");
+      Serial.println(file.name());
+      if(levels){
+        listDir(fs, file.name(), levels -1);
+      }
+    } else {
+      Serial.print("  Archivo: ");
+      Serial.print(file.name());
+      Serial.print("  Tamaño: ");
+      Serial.println(file.size());
+    }
+    file = root.openNextFile();
+  }
+}
+//**************************************************************************************
+void leerFile(fs::FS &fs, const char * path){
+  Serial.printf("Leyendo archivo: %s\n", path);
+
+  File file = fs.open(path);
+  if(!file){
+    Serial.println("Failed to open file for reading");
+    return;
+  }
+
+  Serial.println("Datos del archivo: ");
+  while(file.available()){
+    Serial.write(file.read());
+  }
+  file.close();
+}
+//******************************************************************************************
+void leerSerie(){
+  String comando = "";
+  String dateTime = "";
+  String nombreArchivo = "";
+  String ano, mes, dia, hora, minutos, segundos;
+  int anoInt, mesInt, diaInt, horaInt, minutosInt, segundosInt;
+  char dateTimeChar[22];
+        
+  comando = Serial.readStringUntil(':');
+  if(comando == "setRTC"){              //Si recibe este String seguido por ":" por puerto serie seteará el RTC con la siguiente cadena año mes dia hora minutos segundos
+    dateTime = Serial.readString();     // Ej.:Comando por puero serie: setRTC:20210213163218  -> año:2021, mes: 02, día: 13, hora: 16, minutos: 32, segundos: 18
+    ano = dateTime.substring(0,4);
+    mes = dateTime.substring(4,6);
+    dia = dateTime.substring(6,8);
+    hora = dateTime.substring(8,10);
+    minutos = dateTime.substring(10,12);
+    segundos = dateTime.substring(12,14);
+
+    anoInt = ano.toInt();
+    mesInt = mes.toInt();
+    diaInt = dia.toInt();
+    horaInt = hora.toInt();
+    minutosInt = minutos.toInt();
+    segundosInt = segundos.toInt();
+    rtc.adjust(DateTime(anoInt, mesInt, diaInt, horaInt , minutosInt, segundosInt));
+    DateTime now = rtc.now();
+    sprintf(dateTimeChar, "%02d/%02d/%02d %02d:%02d:%02d", now.year(), now.month(),now.day(),  now.hour(), now.minute(), now.second()); 
+    Serial.println("Fecha y hora modificadas: ");
+    Serial.print(dateTimeChar);
+
+  }
+  if(comando == "leerDir"){
+      listDir(SD, "/", 0);
+  }  
+    if(comando == "leerArchivo"){
+      nombreArchivo = "/";
+      nombreArchivo += Serial.readString();
+      leerFile(SD, nombreArchivo.c_str());
+  }  
+}
 //**************************************************************************************  
+
 void loop() {
-  boolean tiempoCumplido;
+//  boolean tiempoCumplido;
   boolean calibracion;
-  String inicio = "";           //Cuando se inicia la placa Impacto envía al inicio de la comunicación "ini")
-  static unsigned long previousMillis = 0;
-  static unsigned long currentMillis = 0;
+//  String inicio = "";           //Cuando se inicia la placa Impacto envía al inicio de la comunicación "ini")
   String nombreArchivo = "";
   boolean estadoPulsadorInicio;
  
   while (Serial.available() > 0) {    // Es para lectura del puerto serie
- 
+  leerSerie();
   }
   calibracion = digitalRead(pulsadorCalibracion);
   if(!calibracion)  calibracionSensoresPresion();
