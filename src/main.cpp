@@ -65,11 +65,19 @@
 
 
 //#include <toggleLED.h>
+#include <defines.h>
 #include <comunicacion.h>
 #include <libNestor.h>
+#include <displayOLED.h>
+
 #include <EEPROM.h>
 //#include <DHT.h>
 #include <esp_task_wdt.h>
+//#include <Adafruit_SH110X.h>
+//#include <Adafruit_GFX.h>
+#include <Fonts/FreeSans9pt7b.h>
+#include <Fonts/FreeSans12pt7b.h>
+#include <Fonts/FreeSans18pt7b.h>
 
 
 #define DHTPIN 33    // Digital pin connected to the DHT sensor
@@ -77,13 +85,25 @@
 
 #define WDT_TIMEOUT 60
 
+/*
+// Conexiones SPI para el display:
+#define OLED_MOSI     13
+#define OLED_CLK      12
+#define OLED_DC       26
+#define OLED_CS       15
+#define OLED_RST      27
+
+#define LINEHEIGHT 22  // para saltos de linea
+*/
 //SensorDHT sensDHT;
 
 
 DHT dht(DHTPIN, DHTTYPE);
 RTC_DS3231 rtc;
-
-
+// Create the OLED display
+//
+//Adafruit_SH1106 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
+displayOLED displayOled;
 
 
 
@@ -127,7 +147,7 @@ void IRAM_ATTR onTimer3() {
     
 }
 
-
+//*************** Funciones *****************
 
 
 
@@ -150,6 +170,7 @@ void setup() {
   pinMode(pulsadorCalibracion, INPUT);
 
   boolean calibracion;
+  boolean initState = 0;
   
 
   macAdd = WiFi.macAddress();
@@ -187,8 +208,20 @@ void setup() {
 
   //parametros.ssid = "wifi01-ei";
   //parametros.password = "Ax32MnF1975-ReB";
+
+  // Start OLED
+  initState = displayOled.begin(0, true); // we dont use the i2c address but we will reset!
   
- 
+  if(initState == 0){
+	  Serial.println("Falla en inicialización de display OLED");
+  }else{
+	  Serial.println("Exitosa inicialización de display OLED");
+  }
+
+  // Clear the buffer.
+  //display.clearDisplay();
+  //displayOled.display.clearDisplay();
+  displayOled.testDisplay();
   // Print attribute values
   Serial.println(sensorTemp.value);
   Serial.println(sensorTemp.SSID);
@@ -196,7 +229,7 @@ void setup() {
 
   conexion.setup_wifi(sensorTemp.SSID, sensorTemp.Password);
   conexion.setup_mqtt(sensorTemp.url_broker, sensorTemp.topic);
-
+/*
    if (!SD.begin(CS)) {
      Serial.println("inicialización fallida!"); 
      while(!SD.begin(CS)){
@@ -227,9 +260,9 @@ void setup() {
   if (rtc.lostPower()) {
     //    Serial.println("RTC lost power, lets set the time!");
   }
-
+*/
 	dht.begin();    //Inicializar sensor de temperatura
-
+/*
 	EEPROM.begin(EEPROM_SIZE);
 	leerEEPROM();
 	
@@ -239,7 +272,7 @@ void setup() {
 	if(!archivo) {                              //fin por timeout, presión de fuelle fuera de rango o parada por usuario (pulsador inicio)
 		writeFile(SD, str.c_str(), "Nombre archivo, Segundos, Estado final\r");
 	}    
-
+*/
    
 }
 
@@ -266,6 +299,10 @@ void loop() {
   delay(3000);
   sensorTemp.value = dht.readTemperature();
   Serial.println(dht.readTemperature());
+  //mostrarTemperaturaPorDisplay(sensorTemp.value);
+  //printDisplay("Hola mundo", 2, 25, 25, 1000);
+  displayOled.printDisplay((String)sensorTemp.value, 2, 25, 25, 1000);
+
 
   resultadoPub = conexion.publicarData(sensorTemp.value);
   if(resultadoPub == 0){//si falla la publicación
@@ -303,7 +340,7 @@ void loop() {
 
 //********************NESTOR************************************
 
-
+/*
  
   while (Serial.available() > 0) {    // Es para lectura del puerto serie
  
@@ -316,8 +353,7 @@ void loop() {
 	nombreArchivo = rutinaInicioEnsayo();
 	rutinaEnsayo(nombreArchivo);
    }
-
+*/
 
 }
-
 
