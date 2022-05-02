@@ -1,4 +1,6 @@
 #include "displayOLED.h"
+//#include "Adafruit_SH110X.h"
+
 
 /*
 // Conexiones SPI para el display:
@@ -13,8 +15,27 @@
 Adafruit_SH1106G display = Adafruit_SH1106G(128, 64,OLED_MOSI, OLED_CLK, OLED_DC, OLED_RST, OLED_CS);
 
 */
+
+//Adafruit_SH1106G display = Adafruit_SH1106G(128, 64,OLED_MOSI, OLED_CLK, OLED_DC, OLED_RST, OLED_CS);
+
+
+/*
+displayOLED::displayOLED() : Adafruit_SH1106G(w,t, h, *twi,
+                                   rst_pin, clkDuring,
+                                   clkAfter){
+
+}
+*/
+/*
+Adafruit_SH1106G::Adafruit_SH1106G(uint16_t, uint16_t, TwoWire,
+                   int8_t, uint32_t,
+                   uint32_t){
+
+}
+*/
 void displayOLED::testDisplay(void){
 
+	//Adafruit_SH1106G display = Adafruit_SH1106G(128, 64,OLED_MOSI, OLED_CLK, OLED_DC, OLED_RST, OLED_CS);
   // text display tests
   display.clearDisplay();
   display.setTextSize(1);
@@ -35,6 +56,7 @@ void displayOLED::testDisplay(void){
 
 void displayOLED::mostrarTemperaturaPorDisplay(float temp){
 
+	//Adafruit_SH1106G display = Adafruit_SH1106G(128, 64,OLED_MOSI, OLED_CLK, OLED_DC, OLED_RST, OLED_CS);
 	display.clearDisplay();
 	display.setTextSize(1);
   	display.setTextColor(SH110X_WHITE);
@@ -50,6 +72,8 @@ void displayOLED::mostrarTemperaturaPorDisplay(float temp){
 
 void displayOLED::printDisplay(String linea, int textSize, int xCursor, int yCursor, int demora){
 
+	//Adafruit_SH1106G display = Adafruit_SH1106G(128, 64,OLED_MOSI, OLED_CLK, OLED_DC, OLED_RST, OLED_CS);
+
 	display.clearDisplay();
 	display.setTextSize(textSize);
   	display.setTextColor(SH110X_WHITE);
@@ -59,6 +83,7 @@ void displayOLED::printDisplay(String linea, int textSize, int xCursor, int yCur
 	//display.setCursor(15, 20);
   	//display.println(temp);
   	display.display();
+	delay(demora);
 
 
 

@@ -147,9 +147,6 @@ void IRAM_ATTR onTimer3() {
     
 }
 
-//*************** Funciones *****************
-
-
 
 //void toggleLED(void);
 
@@ -222,6 +219,7 @@ void setup() {
   //display.clearDisplay();
   //displayOled.display.clearDisplay();
   displayOled.testDisplay();
+
   // Print attribute values
   Serial.println(sensorTemp.value);
   Serial.println(sensorTemp.SSID);

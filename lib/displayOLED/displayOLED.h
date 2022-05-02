@@ -4,11 +4,11 @@
 #include <defines.h>
 
 
-class displayOLED : public Adafruit_SH1106G{
+class displayOLED : public Adafruit_SH1106G {
 
 	public:
-		//displayOLED(){} 
-		Adafruit_SH1106G display = Adafruit_SH1106G(128, 64,OLED_MOSI, OLED_CLK, OLED_DC, OLED_RST, OLED_CS);
+		displayOLED():Adafruit_SH1106G(128, 64,OLED_MOSI, OLED_CLK, OLED_DC, OLED_RST, OLED_CS){};//Constructor
+		Adafruit_SH1106G display = Adafruit_SH1106G(128, 64,OLED_MOSI, OLED_CLK, OLED_DC, OLED_RST, OLED_CS);//Constructor
 		//Adafruit_SH1106G(128, 64,OLED_MOSI, OLED_CLK, OLED_DC, OLED_RST, OLED_CS);
 		void testDisplay(void);
 		void mostrarTemperaturaPorDisplay(float);
