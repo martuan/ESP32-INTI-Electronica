@@ -10,7 +10,7 @@
 //#define LED_BUILTIN 2           // Parpadea si no encuentra la tarjeta micro SD
 #define sensorPresion1 34       // Sensa la presión dentro del preservativo
 #define sensorPresion2 35       // Sensa la presión dentro del fuelle de sujeción 
-#define pulsadorCalibracion 33  // Si bootea con el pulsador presionado entra en modo calibración de sensores de presión
+#define pulsadorCalibracion 2  // Si bootea con el pulsador presionado entra en modo calibración de sensores de presión
 
 #define CS 5                   //Pin de Chip Select para escribir el SD
 #define pulsadorInicio 4       //Pulsador de inicio de ensayo. Parada durante el ensayo. Guardar valor durante calibración 

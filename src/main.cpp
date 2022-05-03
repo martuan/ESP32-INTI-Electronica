@@ -207,7 +207,8 @@ void setup() {
   //parametros.password = "Ax32MnF1975-ReB";
 
   // Start OLED
-  initState = displayOled.begin(0, true); // we dont use the i2c address but we will reset!
+  //initState = displayOled.begin(0, true); // we dont use the i2c address but we will reset!
+  initState = displayOled.display.begin(0, true); // we dont use the i2c address but we will reset!
   
   if(initState == 0){
 	  Serial.println("Falla en inicialización de display OLED");
@@ -218,7 +219,14 @@ void setup() {
   // Clear the buffer.
   //display.clearDisplay();
   //displayOled.display.clearDisplay();
+  Serial.println("llegó acá 0");
+  //displayOled.clearDisplay();
+  displayOled.display.clearDisplay();
+  Serial.println("llegó acá 1");
+  delay(2000);
   displayOled.testDisplay();
+  
+  Serial.println("llegó acá");
 
   // Print attribute values
   Serial.println(sensorTemp.value);
@@ -260,6 +268,7 @@ void setup() {
   }
 */
 	dht.begin();    //Inicializar sensor de temperatura
+	Serial.println("llegó acá");
 /*
 	EEPROM.begin(EEPROM_SIZE);
 	leerEEPROM();
@@ -299,6 +308,7 @@ void loop() {
   Serial.println(dht.readTemperature());
   //mostrarTemperaturaPorDisplay(sensorTemp.value);
   //printDisplay("Hola mundo", 2, 25, 25, 1000);
+  Serial.println("llegó acá 3 - loop");
   displayOled.printDisplay((String)sensorTemp.value, 2, 25, 25, 1000);
 
 

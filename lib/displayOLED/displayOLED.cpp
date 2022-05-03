@@ -18,11 +18,9 @@ Adafruit_SH1106G display = Adafruit_SH1106G(128, 64,OLED_MOSI, OLED_CLK, OLED_DC
 
 //Adafruit_SH1106G display = Adafruit_SH1106G(128, 64,OLED_MOSI, OLED_CLK, OLED_DC, OLED_RST, OLED_CS);
 
-
 /*
-displayOLED::displayOLED() : Adafruit_SH1106G(w,t, h, *twi,
-                                   rst_pin, clkDuring,
-                                   clkAfter){
+
+displayOLED::displayOLED() : Adafruit_SH1106G(128, 64,OLED_MOSI, OLED_CLK, OLED_DC, OLED_RST, OLED_CS){
 
 }
 */
@@ -41,6 +39,7 @@ void displayOLED::testDisplay(void){
   display.setTextSize(1);
   display.setTextColor(SH110X_WHITE);
   display.setCursor(0, 0);
+  Serial.println("dentro de testDisplay");
   display.println("Bienvenido Datalogger");
   display.println("");
   display.setTextColor(SH110X_BLACK, SH110X_WHITE); // 'inverted' text
@@ -83,7 +82,7 @@ void displayOLED::printDisplay(String linea, int textSize, int xCursor, int yCur
 	//display.setCursor(15, 20);
   	//display.println(temp);
   	display.display();
-	delay(demora);
+	//delay(demora);
 
 
 
