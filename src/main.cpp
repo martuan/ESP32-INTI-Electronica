@@ -99,7 +99,7 @@
 
 
 DHT dht(DHTPIN, DHTTYPE);
-RTC_DS3231 rtc;
+//RTC_DS3231 rtc;
 // Create the OLED display
 //
 //Adafruit_SH1106 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
@@ -165,6 +165,7 @@ void setup() {
   pinMode(pulsadorInicio, INPUT);
   pinMode(activarElectrovalvula, OUTPUT);
   pinMode(pulsadorCalibracion, INPUT);
+  pinMode(CS, OUTPUT);
 
   boolean calibracion;
   boolean initState = 0;
@@ -235,7 +236,7 @@ void setup() {
 
   conexion.setup_wifi(sensorTemp.SSID, sensorTemp.Password);
   conexion.setup_mqtt(sensorTemp.url_broker, sensorTemp.topic);
-/*
+
    if (!SD.begin(CS)) {
      Serial.println("inicialización fallida!"); 
      while(!SD.begin(CS)){
@@ -256,22 +257,15 @@ void setup() {
         return;
     }
   // **********************************************************************
-  if (! rtc.begin()) {
-    //   Serial.println("Couldn't find RTC");
-    while (1);
-  }
 
-  //rtc.adjust(DateTime(__DATE__, __TIME__)); // which will set the time according to our PC time.
+  
 
-  if (rtc.lostPower()) {
-    //    Serial.println("RTC lost power, lets set the time!");
-  }
-*/
 	dht.begin();    //Inicializar sensor de temperatura
 	Serial.println("llegó acá");
-/*
+
 	EEPROM.begin(EEPROM_SIZE);
 	leerEEPROM();
+	
 	
 	String str = "/Maquina_";              //El nombre del archivo corresponde al número de máquina
 	str += String(NUMERO_MAQUINA);
@@ -279,7 +273,7 @@ void setup() {
 	if(!archivo) {                              //fin por timeout, presión de fuelle fuera de rango o parada por usuario (pulsador inicio)
 		writeFile(SD, str.c_str(), "Nombre archivo, Segundos, Estado final\r");
 	}    
-*/
+
    
 }
 
@@ -348,20 +342,23 @@ void loop() {
 
 //********************NESTOR************************************
 
-/*
+	Serial.println("llegó al loop: preNestor");
  
   while (Serial.available() > 0) {    // Es para lectura del puerto serie
  
   }
-  calibracion = digitalRead(pulsadorCalibracion);
-  if(!calibracion)  calibracionSensoresPresion();
-        
-   estadoPulsadorInicio = digitalRead(pulsadorInicio);
-   if(estadoPulsadorInicio == LOW){
-	nombreArchivo = rutinaInicioEnsayo();
-	rutinaEnsayo(nombreArchivo);
-   }
-*/
+	//Serial.println("llegó al loop: Nestor 0");  
+  	calibracion = digitalRead(pulsadorCalibracion);
+  	if(!calibracion)  calibracionSensoresPresion();
+	//Serial.println("llegó al loop: Nestor 1");
+	estadoPulsadorInicio = digitalRead(pulsadorInicio);
+	//Serial.println("llegó al loop: Nestor 2");
+	if(estadoPulsadorInicio == LOW){
+		nombreArchivo = rutinaInicioEnsayo();
+		//Serial.println("llegó al loop: rutinaInicioEnsayo");
+		rutinaEnsayo(nombreArchivo);
+		//Serial.println("llegó al loop: Nestor");
+	}
 
 }
 

@@ -139,6 +139,7 @@ void calibracionSensoresPresion(void){
           inicio = digitalRead(pulsadorInicio); 
           }
         valorPresionFuelle = analogRead(sensorPresion2);
+		
         EEPROM.writeInt(addressEEPROM_1kPa, valorPresionFuelle);       //Escribir en EEPROM b en posicion addressEEPROM
         EEPROM.commit();
         Serial.print("El valor para 1kPa es: ");         
@@ -392,19 +393,36 @@ void rutinaEnsayo(String nombreArchivo){
 String rutinaInicioEnsayo(void){
     String nombreArchivo = "";
     String cabecera = "";
-    
+    //Serial.println("dentro de rutinaInicioEnsayo pre1");
+	dht2.begin();
     float temp = dht2.readTemperature(); //Leemos la temperatura en grados Celsius
     float humed = dht2.readHumidity(); //Leemos la Humedad
+	//Serial.println("dentro de rutinaInicioEnsayo pre2");
+
+	if (! rtc2.begin()) {
+		//   Serial.println("Couldn't find RTC");
+    while (1);
+  	}
+
+  	//rtc.adjust(DateTime(__DATE__, __TIME__)); // which will set the time according to our PC time.
+
+  	if (rtc2.lostPower()) {
+    	//    Serial.println("RTC lost power, lets set the time!");
+  	}
+
     DateTime now = rtc2.now();
+	
+    Serial.println("dentro de rutinaInicioEnsayo 0");
     
-    char dateTimeISO[17];
-    sprintf(dateTimeISO, "%02d%02d%02dT%02d%02d%02d", now.year(), now.month(),now.day(),  now.hour(), now.minute(), now.second()); 
+	char dateTimeISO[17];
+    
+	sprintf(dateTimeISO, "%02d%02d%02dT%02d%02d%02d", now.year(), now.month(),now.day(),  now.hour(), now.minute(), now.second()); 
     nombreArchivo += "/";
     nombreArchivo += String(dateTimeISO);
     nombreArchivo += ".csv";
     writeFile(SD, nombreArchivo.c_str(), "Máquina número:, 01 \r\n");
     appendFile(SD, nombreArchivo.c_str(), "Fecha  y  hora, Temperatura, Humedad \r\n");
-    
+    Serial.println("dentro de rutinaInicioEnsayo 1");
     char dateTime[20];
     sprintf(dateTime, "%02d/%02d/%02d %02d:%02d:%02d", now.year(), now.month(), now.day(),  now.hour(), now.minute(), now.second()); 
     cabecera += String(dateTime);
@@ -415,7 +433,10 @@ String rutinaInicioEnsayo(void){
     cabecera += "\r\n";
     imprimirPC(now, temp, humed);
     appendFile(SD, nombreArchivo.c_str(), cabecera.c_str());
+	
+	//nombreArchivo = "pepe.csv";
     String str = nombreArchivo.c_str();  
+	//Serial.println("dentro de rutinaInicioEnsayo 2");
 
-  return str; 
+  	return str; 
 }
