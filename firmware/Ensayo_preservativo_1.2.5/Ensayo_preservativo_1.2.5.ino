@@ -12,9 +12,12 @@
  18/03/22 -> Se genera un archivo cada vez que se presiona el pulsador se genera un archivo .csv para almacenar los datos cuyo nombre 
  se crea en formato ISO8601 hora local (yyyymmddThhmmss), tomando fecha y hora del RTC
  Se genera un archivo donde se almacenan el último valor de cada ensayo (se crea una vez si no existe) con el nombre Maquina_<NUMERO_MAQUINA>.csv . Cada máquina de ensayos tendrá su número
- 
+
+ Comandos Puerto Serie:
  Se puede setear el reloj de tiempo real (RTC) desde el puerto serie (115200 baud, 8 bits, sin paridad, un stop bit. Enviar setRTC:año mes dia hora minutos segundos (todo junto sin espacios)
  Ej.:Comando por puero serie: setRTC:20210213163218  -> año:2021, mes: 02, día: 13, hora: 16, minutos: 32, segundos: 18
+ Enviando "leerDir:" devuelve el directorio Raiz de la SD.
+ Enviando "leerArchivo:<Nombre de Archivo>" devuelve el contenido del archivo (UTF-8)
 */
 
 #include <Wire.h>
@@ -437,19 +440,19 @@ void rutinaEnsayo(String nombreArchivo){
    if(segundos == timeOut){
       lineaMedicion += "Fin de ensayo por Time Out \r\n"; 
       lineaMedicionNombreArchivo += "Fin de ensayo por Time Out \r\n"; 
-      appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());    
+      appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());                 //Escribe última medición antes de reventado en archivo de este ensayo
       Serial.println("Fin de ensayo por Time Out");
-      appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());
+      appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
    }     
    
    inicio = digitalRead(pulsadorInicio);
    if(inicio == LOW){
       lineaMedicion += "Fin de ensayo por parada de usuario \r\n"; 
       lineaMedicionNombreArchivo += "Fin de ensayo por parada de usuario \r\n"; 
-      appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());    
+      appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());                 //Escribe última medición antes de reventado en archivo de este ensayo
       Serial.println("Fin de ensayo por parada de usuario");
-      appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());
-      segundos = timeOut + 1;
+      appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
+      segundos = timeOut + 1;         //Para que salga del While
       digitalWrite(activarElectrovalvula, LOW);
       delay(1500);
    }
@@ -461,19 +464,19 @@ void rutinaEnsayo(String nombreArchivo){
     if(bajaPresionFuelle == HIGH){
       lineaMedicion += "Fin de ensayo por baja presión en fuelle \r\n"; 
       lineaMedicionNombreArchivo += "Fin de ensayo por baja presión en fuelle \r\n"; 
-      appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());    
+      appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());                 //Escribe última medición antes de reventado en archivo de este ensayo    
       Serial.println("Fin de ensayo por baja presión en fuelle");
-      appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());
-      segundos = timeOut + 1;
+      appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
+      segundos = timeOut + 1;       //Para que salga del While
       delay(300);
     }
     if(altaPresionFuelle == HIGH){
       lineaMedicion += "Fin de ensayo por alta presión en fuelle \r\n"; 
       lineaMedicionNombreArchivo += "Fin de ensayo por alta presión en fuelle \r\n"; 
-      appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());    
+      appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());               //Escribe última medición antes de reventado en archivo de este ensayo  
       Serial.println("Fin de ensayo por alta presión en fuelle");
-      appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());
-      segundos = timeOut + 1;
+      appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());  //Escribe última medición antes de reventado en archivo Maquina_#
+      segundos = timeOut + 1;       //Para que salga del While
       delay(300);
     }
     lineaMedicion = "";
