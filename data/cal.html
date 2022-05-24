@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ESP32 Web Server</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" type="text/css" href="style.css">
+  <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+	table, td {
+		border: 1px solid black;
+	}
+	</style>
+</head>
+
+<body  BGCOLOR="black">
+	<div class="header">
+	   <h1>Software de calibracion</h1>
+	   <div id="json"></div>
+		 </div>
+		 <div class="content">
+	   <div class="pure-g">
+		 <div class="pure-u-1 pure-u-md-1-2">
+			  
+ 
+		 <div class="pure-u-1 pure-u-md-1-2">
+		   <div class="card">
+			 <h1>Calibracion por grupo de canales</h1>
+			 <p id="reconnect" style="color: #600" hidden></p>
+			 <form action="#" id="wifiform" class="pure-form pure-form-stacked">
+			   <p id="demo"></p>
+			   <legend>Seleccione el grupo de 8 canales a calibrar ...</legend>
+			   <select id="canales">
+				  <option value="canal_1">canales 1 - 8</option>
+			   <option value="canal_9"> canales 9 - 16</option>
+			   <option value="canal_17"> canales 17 - 25</option>
+			   <option value="canal_26"> canales 26 - 32</option>
+			   </select>
+			   <legend>Seleccione rango de temperaturas...</legend>
+			   <select id="rangotemperaturas">
+				  <option value="400">0-400</option>
+			   <option value="600"> 401-600</option>
+			   <option value="800"> 601-800</option>
+			   <option value="1000"> 801-1000</option>
+			   <option value="1200"> 1001-1200</option>
+			   </select>
+			   <br> <br/>
+			   <legend>Ingrese el valor de patron de temperatura</legend>
+			   <label><input id="patron"   style="width:100" ></label>
+			   <input id="botonMedir"  name="button" type="button" class="btn-info" style="cursor: pointer" onClick="getMedir()" value="Medir">
+			   <div id="wifi-spinner-inferior">Esperando valor de temperatura sensado...<div class="spinner spinner-small"></div></div>
+			  <div id="indicador"> <div class="btn btn-succes">El registrador fue inicializado correctamente</div></div>	
+			 </form>
+			 </div>
+		 </div>
+ 
+	  
+		   <div class="card">
+			<h1>Resultados de la medicion</h1>
+			<table id="myTable">
+		   <tr>
+		   <td>temperatura Patron</td>
+		   <td>temperatura del equipo</td>
+		   </tr>
+		   </table>
+			 <br>
+		   <br>
+			<input name="button" style="cursor: pointer" type="button" class="btn-info" onClick="eliminarmedicion()" value="Eliminar medicion"> 
+		   <input name="button" style="cursor: pointer" type="button" class="btn-info" onClick="calcular_curva()" value="Generar Curva de calibracion"> 
+		   <a id="dlink"  style="display:none;"></a>
+		   <input type="button" style="cursor: pointer" class="btn-info" onclick="tableToExcel('myTable', 'name', 'canalNº.xls')" value="Guardar tabla de calibracion">
+		   <input name="button" style="cursor: pointer" type="button" class="btn-info" onClick="calibrar()" value="Calibrar dispositivo"> 
+		   <div id="wifi-spinner-superior">realizando calibracion<div class="spinner spinner-small"></div></div>
+ 
+		 </div>
+		 </div>
+			<div class="pure-u-1 pure-u-md-1-2">
+		   <div class="card">
+		   
+			 <h1>Finalizar calibracion</h1>
+			 <form action="#" id="wifiform" class="pure-form pure-form-stacked">
+			  <legend>Finalizada la calibracion del dispositivo de clik en finalizar calibracion</legend>
+			  <br>   
+			 <input name="button" style="cursor: pointer" type="button" class="btn-info" onClick="getIniciar()" value="Finalizar Calibracion"> 
+		  <div id="wifi-spinner-inicio">Esperando inicio del registrador<div class="spinner spinner-small"></div></div>
+		  </form>
+		   </div>
+		 </div>
+		</div>
+	 </div>
+  <script type="text/javascript">
+  
+ 
+	 
+	 document.addEventListener("DOMContentLoaded", function(event) { 
+	 window.scrollTo(0, 0);
+	 toggleSpinnerinferior();
+	 toggleSpinnersuperior();
+	 toggleSpinnerinicio();
+	 var inicio = document.getElementById("indicador");
+	 inicio.style.visibility = 'hidden';
+  
+	 });
+ var o;
+ var p;
+ var canalsensado;
+ var n=0;	
+ var tableToExcel = (function () {
+		 var uri = 'data:application/vnd.ms-excel;base64,'
+		 , template = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>{worksheet}</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body><table>{table}</table></body></html>'
+		 , base64 = function (s) { return window.btoa(unescape(encodeURIComponent(s))) }
+		 , format = function (s, c) { return s.replace(/{(\w+)}/g, function (m, p) { return c[p]; }) }
+		 return function (table, name, filename) {
+			 if (!table.nodeType) table = document.getElementById(table)
+			 var ctx = { worksheet: name || 'Worksheet', table: table.innerHTML }
+ 
+			 document.getElementById("dlink").href = uri + base64(format(template, ctx));
+			 document.getElementById("dlink").download = filename;
+			 document.getElementById("dlink").click();
+ 
+		 }
+	 })()	
+ 
+ 
+ 
+ var filas=0;
+ var myVar;	
+ var flag; 
+  
+ function getMedir() {
+	 flag=1;
+	 var xmlhttp = new XMLHttpRequest();
+	 toggleSpinnerinferior();
+	 document.getElementById("botonMedir").disabled = true; 
+	 var x = document.getElementById("canales");
+	 var i = x.selectedIndex;
+	 var grupocanales= x.options[i].value;
+	   var data = "Medir" + grupocanales + "&";
+		 xmlhttp.onreadystatechange=function() {
+		 if (xmlhttp.readyState == 4 && xmlhttp.status == 200) {
+			 myFunctionmedir(xmlhttp.responseText);
+			 window.scrollTo(0, 250);			
+		 }
+	 }
+	 xmlhttp.open("GET",data,true);
+	 xmlhttp.send();	
+ 
+ }	
+ 
+ 
+ function myFunctionmedir(response) {
+	 document.getElementById("botonMedir").disabled = false; 
+	 toggleSpinnerinferior();
+	 var x = document.getElementById("canales");
+	 var i = x.selectedIndex;
+	 var grupocanales= x.options[i].value;
+	 var countRow =  1;
+	 var arr = JSON.parse(response);
+	 var table = document.getElementById("myTable");
+	 var row = table.insertRow(countRow);
+	 var cell1 = row.insertCell(0);
+	 var cell2 = row.insertCell(1);
+	 cell1.innerHTML = document.getElementById("patron").value;
+	 cell2.innerHTML = arr.canal;
+	 canalsensado=grupocanales;
+	 filas=Number(filas + 1);
+	 var temperatura= Number(document.getElementById("patron").value);
+	 var inicio=1;
+	 console.log(temperatura);
+	 console.log(flag);
+ } 
+ 
+ function eliminarmedicion() {
+	 document.getElementById("myTable").deleteRow(1);	
+	  filas=Number(filas - 1);
+	 }
+ 
+ 
+ function calcular_curva(){
+ 
+	 console.log("funcion curva");
+	 n = filas;
+	 console.log(n);
+	 var sumaX = 0;
+	 var sumaY=0;
+	 var cuadraX=0;
+	 var cuadraY=0;
+	 var sumacuadraX=0;
+	 var sumacuadraY=0;
+	 var multiXY=0;
+	 var sumamultiXY=0;
+	 var sumaXcuadra=0;
+	 var table = document.getElementById("myTable");
+   
+	 
+		   for(var i=1;i<=n;i++)
+			 {
+			 sumaY=sumaY + parseFloat(document.getElementById("myTable").rows[i].cells[1].innerText); 
+			 sumaX=sumaX + parseFloat(document.getElementById("myTable").rows[i].cells[0].innerText); 
+			 multiXY= parseFloat(document.getElementById("myTable").rows[i].cells[1].innerText) * parseFloat(document.getElementById("myTable").rows[i].cells[0].innerText);
+			 cuadraY= Math.pow(parseFloat(document.getElementById("myTable").rows[i].cells[1].innerText),2);  
+			 sumacuadraY=sumacuadraY + cuadraY;
+			 sumamultiXY= sumamultiXY + multiXY;
+			 }
+		 sumaYcuadra = parseFloat(sumaY * sumaY);
+		 p = ((n * sumamultiXY) - sumaY * sumaX)	/ ((n * sumacuadraY) - sumaYcuadra);
+		 o = (sumaX - p * sumaY) / n ; 
+	 
+		 var table = document.getElementById("myTable");
+		 var row = table.insertRow(1);
+		 var cell1 = row.insertCell(0);
+		 var cell2 = row.insertCell(1);
+		 var cell3 = row.insertCell(2);
+		 cell1.innerHTML = "pendiente" + p;
+		 cell2.innerHTML = "Origen" + o;
+		 cell3.innerHTML = "Canal Calibrado" + canalsensado;
+	  filas=Number(filas + 1);
+	 }	
+ 
+ 
+ function calibrar(){
+	 toggleSpinnersuperior();
+	 var x = document.getElementById("rangotemperaturas");
+	 var i = x.selectedIndex;
+	 var rango= x.options[i].value;
+	 var xmlhttp = new XMLHttpRequest();
+	 var ordenada=o;
+	 var pendiente=p;
+	 var canal= document.getElementById("canales").value;
+	 var data = "calibracion" + canal + "&" + rango + "&" + pendiente + "&" + ordenada +"&";
+	 xmlhttp.onreadystatechange=function() {
+		 if (xmlhttp.readyState == 4 && xmlhttp.status == 200){
+			 myFunction(xmlhttp.responseText);
+			 
+		 }
+	 } 
+	 xmlhttp.open("GET", data, true);
+	 xmlhttp.send();
+ 
+ function myFunction(response) {
+	 var elmtTable = document.getElementById('myTable');
+	 var tableRows = elmtTable.getElementsByTagName('tr');
+	 var rowCount = tableRows.length;   
+	 alert("Canal calibrado");
+	 toggleSpinnersuperior();
+	 
+	 for (var x=rowCount-1; x>0; x--) {
+	 document.getElementById("myTable").deleteRow(x);
+ }
+	 filas=0;
+	 console.log(filas);
+	 } 
+	 
+		 }
+	 
+ 
+ function toggleSpinnerinferior() {
+ 
+	 var element = document.getElementById("wifi-spinner-inferior");
+	 if ( element.style.visibility == "hidden") {
+		 element.style.visibility = 'visible';     // Show
+	 }
+	 else {
+		 element.style.visibility = 'hidden';      // Hide
+	 }	
+ }
+ function toggleSpinnersuperior() {
+ 
+	 var element = document.getElementById("wifi-spinner-superior");
+	 if ( element.style.visibility == "hidden") {
+		 element.style.visibility = 'visible';     // Show
+	 }
+	 else {
+		 element.style.visibility = 'hidden';      // Hide
+	 }	
+ }
+ function toggleSpinnerinicio() {
+ 
+	 var element = document.getElementById("wifi-spinner-inicio");
+	 if ( element.style.visibility == "hidden") {
+		 element.style.visibility = 'visible';     // Show
+	 }
+	 else {
+		 element.style.visibility = 'hidden';      // Hide
+	 }	
+ }
+ function getIniciar() {
+	 toggleSpinnerinicio();
+	 window.scrollTo(0, 0);	
+	 var xmlhttp = new XMLHttpRequest();
+	 var inicio = "inical";
+	 xmlhttp.open("GET",inicio, true);
+	 xmlhttp.send();
+	 
+	 xmlhttp.onreadystatechange=function() {
+		 if (xmlhttp.readyState == 4 && xmlhttp.status == 200) {
+			myFunction(xmlhttp.responseText);
+			console.log("recibo inicio");
+			 
+		 }
+	 }
+ var myVar3;	
+ function myFunction(response) {
+		 toggleSpinnerinicio();
+		 var inicio = document.getElementById("indicador");
+		 var arr = JSON.parse(response);
+		 if (arr.FlagStop == 0){
+		 console.log("entro a if");
+		 inicio.style.visibility = 'visible';}
+		 myVar3=setTimeout(toggleapaga, 1000);
+		 }
+ }
+ 
+ var myVar4;	
+ function toggleapaga() {
+ 
+	 var inicio = document.getElementById("indicador");
+	 inicio.style.visibility = 'hidden';
+	 myVar4=setTimeout(toggleenciende, 500);
+ }
+ var myVar5;	
+ function toggleenciende() {
+	 var inicio = document.getElementById("indicador");
+	 inicio.style.visibility = 'visible';
+	 myVar5=setTimeout(toggleapaga, 1000);
+ }
+ </script>
+ </body>
+</html>

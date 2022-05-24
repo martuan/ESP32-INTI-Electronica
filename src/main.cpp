@@ -78,6 +78,8 @@
 #include <Fonts/FreeSans9pt7b.h>
 #include <Fonts/FreeSans12pt7b.h>
 #include <Fonts/FreeSans18pt7b.h>
+#include "ESPAsyncWebServer.h"
+#include "SPIFFS.h"
 
 
 #define DHTPIN 33    // Digital pin connected to the DHT sensor
@@ -105,8 +107,11 @@ DHT dht(DHTPIN, DHTTYPE);
 //Adafruit_SH1106 display(OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
 displayOLED displayOled;
 
-
-
+AsyncWebServer server(80);
+// Set LED GPIO
+const int ledPin = 2;
+// Stores LED state
+String ledState;
 
 
 Network conexion;
@@ -147,6 +152,8 @@ void IRAM_ATTR onTimer3() {
     
 }
 
+String processor(const String& var);
+void setup_webserver(void); 
 
 //void toggleLED(void);
 
@@ -186,7 +193,7 @@ void setup() {
   esp_task_wdt_add(NULL); //add current thread to WDT watch
 	
 	//sensDHT.inicializar();
-  
+
 
   // Access attributes and set values
   sensorTemp.value = 25.0;
@@ -220,14 +227,14 @@ void setup() {
   // Clear the buffer.
   //display.clearDisplay();
   //displayOled.display.clearDisplay();
-  Serial.println("llegó acá 0");
+  //Serial.println("llegó acá 0");
   //displayOled.clearDisplay();
   displayOled.display.clearDisplay();
-  Serial.println("llegó acá 1");
+  //Serial.println("llegó acá 1");
   delay(2000);
   displayOled.testDisplay();
   
-  Serial.println("llegó acá");
+  //Serial.println("llegó acá");
 
   // Print attribute values
   Serial.println(sensorTemp.value);
@@ -261,7 +268,7 @@ void setup() {
   
 
 	dht.begin();    //Inicializar sensor de temperatura
-	Serial.println("llegó acá");
+	//Serial.println("llegó acá");
 
 	EEPROM.begin(EEPROM_SIZE);
 	leerEEPROM();
@@ -274,11 +281,15 @@ void setup() {
 		writeFile(SD, str.c_str(), "Nombre archivo, Segundos, Estado final\r");
 	}    
 
+
+//**********************Agregado de server********************
+
+  setup_webserver();
    
 }
 
 void loop() {
-  
+
   bool resultadoPub = 0;
   boolean tiempoCumplido;
   boolean calibracion;
@@ -295,8 +306,10 @@ void loop() {
   esp_task_wdt_reset();
 
   conexion.cambioDeParametros();
-
-  
+  //**************************
+  macAdd = WiFi.macAddress();
+  Serial.println( "MAC address: " + macAdd );
+  //**************************
   delay(3000);
   sensorTemp.value = dht.readTemperature();
   Serial.println(dht.readTemperature());
@@ -362,3 +375,77 @@ void loop() {
 
 }
 
+
+
+// Replaces placeholder with LED state value
+String processor(const String& var){
+  Serial.println(var);
+  if(var == "STATE"){
+    if(digitalRead(ledPin)){
+      ledState = "ON";
+    }
+    else{
+      ledState = "OFF";
+    }
+    Serial.print(ledState);
+    return ledState;
+  }
+  if(var == "STATEtemp"){
+    
+    Serial.print((String)sensorTemp.value);
+    return (String)sensorTemp.value;
+  }
+  return String();
+}
+
+
+void setup_webserver(void){
+
+
+  // Initialize SPIFFS
+  if(!SPIFFS.begin(true)){
+    Serial.println("An Error has occurred while mounting SPIFFS");
+    return;
+  }
+
+  // Route for root / web page
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+  
+  // Route to load style.css file
+  server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/style.css", "text/css");
+  });
+
+  // Route to set GPIO to HIGH
+  server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(ledPin, HIGH);    
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+  
+  // Route to set GPIO to LOW
+  server.on("/off", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(ledPin, LOW);    
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+
+	// Route for calibracion web page
+  server.on("/calibracion", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/calibracion.html", String(), false, processor);
+  });
+
+  	// Route for prueba web page
+  server.on("/prueba", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/prueba.html", String(), false, processor);
+  });
+    // Route for prueba web page
+  server.on("/cal", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/cal.html", String(), false, processor);
+  });
+
+  // Start server
+  server.begin();
+
+
+}
