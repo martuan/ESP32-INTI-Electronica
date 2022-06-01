@@ -16,8 +16,10 @@
  Comandos Puerto Serie:
  Se puede setear el reloj de tiempo real (RTC) desde el puerto serie (115200 baud, 8 bits, sin paridad, un stop bit. Enviar setRTC:año mes dia hora minutos segundos (todo junto sin espacios)
  Ej.:Comando por puero serie: setRTC:20210213163218  -> año:2021, mes: 02, día: 13, hora: 16, minutos: 32, segundos: 18
+ 
  Enviando "leerDir:" devuelve el directorio Raiz de la SD.
- Enviando "leerArchivo:<Nombre de Archivo>" devuelve el contenido del archivo (UTF-8)
+ Enviando "leerArchivo:<Nombre de Archivo>" devuelve el contenido del archivo (UTF-8). Si el archivo esta dentro de un subdirectorio especificar ruta. Ej.: "leerArchivo:/20220601/20220601T083911.csv" 
+ Enviando "leerSubDir:<Nombre de directorio>" devuelve el contenido del directorio. Ej.: Enviando "leerSubDir:/20220601" devuelve el contenido dentro del directorio /20220601
 */
 
 #include <Wire.h>
@@ -389,6 +391,7 @@ void rutinaEnsayo(String nombreArchivo){
   valorAD_maximo_fuelle = EEPROM.readInt(addressEEPROM_2kPa); //Valor de presión máximo (en entero del AD) en el fuelle (sensor de presión 2) 
 
   digitalWrite(activarElectrovalvula, HIGH);
+  delay(200);
   while(segundos < timeOut){
     registrarDatos = tiempoTranscurrido(false);
     if(registrarDatos){
@@ -445,6 +448,7 @@ void rutinaEnsayo(String nombreArchivo){
       appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
    }     
    
+   //  delay(200);
    inicio = digitalRead(pulsadorInicio);
    if(inicio == LOW){
       lineaMedicion += "Fin de ensayo por parada de usuario \r\n"; 
@@ -484,16 +488,39 @@ void rutinaEnsayo(String nombreArchivo){
   digitalWrite(activarElectrovalvula, LOW);
 }
 //********************************************************************************
+void createDir(fs::FS &fs, const char * path){
+  Serial.printf("Creating Dir: %s\n", path);
+  if(fs.mkdir(path)){
+    Serial.println("Dir created");
+  } else {
+    Serial.println("mkdir failed");
+  }
+}
+//********************************************************************************
 String rutinaInicioEnsayo(){
     String nombreArchivo = "";
     String cabecera = "";
+    String nombreDirectorio = "";
+    boolean directorioExistente = false;
     
     float temp = dht.readTemperature(); //Leemos la temperatura en grados Celsius
     float humed = dht.readHumidity(); //Leemos la Humedad
     DateTime now = rtc.now();
     
-    char dateTimeISO[17];
+    char dateISO[9];
+    sprintf(dateISO, "%02d%02d%02d", now.year(), now.month(),now.day()); 
+    nombreDirectorio += "/";
+    nombreDirectorio += String(dateISO);
+    directorioExistente = SD.exists(nombreDirectorio.c_str());
+    if(directorioExistente){
+      
+    }else{
+      createDir(SD,nombreDirectorio.c_str());
+    }
+//    char dateTimeISO[17];
+    char dateTimeISO[26];
     sprintf(dateTimeISO, "%02d%02d%02dT%02d%02d%02d", now.year(), now.month(),now.day(),  now.hour(), now.minute(), now.second()); 
+    nombreArchivo += nombreDirectorio;
     nombreArchivo += "/";
     nombreArchivo += String(dateTimeISO);
     nombreArchivo += ".csv";
@@ -515,7 +542,37 @@ String rutinaInicioEnsayo(){
   return str; 
 }
 //**************************************************************************************************
+void listSubDir(fs::FS &fs, const char * dirname, uint8_t levels){
+  Serial.println("");
+  Serial.printf("Listado de directorio: %s\n", dirname);
+
+  File root = fs.open(dirname);
+  if(!root){
+    Serial.println("Failed to open directory");
+    return;
+  }
+  if(!root.isDirectory()){
+    Serial.println("Not a directory");
+    return;
+  }
+String rutaNombre = "";
+String nombre = "";
+  File file = root.openNextFile();
+  while(file){
+    if(file.isDirectory()){
+      rutaNombre = file.name();
+      nombre = rutaNombre.substring(11);
+      Serial.println(nombre);
+      if(levels){
+        listDir(fs, file.name(), levels -1);
+      }
+    }
+    file = root.openNextFile();
+  }
+}
+//**************************************************************************************************
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
+  Serial.println("");
   Serial.printf("Listado de directorio: %s\n", dirname);
 
   File root = fs.open(dirname);
@@ -532,16 +589,17 @@ void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
   while(file){
     if(file.isDirectory()){
       Serial.print("  DIR : ");
-      Serial.println(file.name());
+      Serial.println(file.name());     
       if(levels){
         listDir(fs, file.name(), levels -1);
       }
-    } else {
+    }else {
       Serial.print("  Archivo: ");
       Serial.print(file.name());
       Serial.print("  Tamaño: ");
       Serial.println(file.size());
     }
+ //     Serial.println("");
     file = root.openNextFile();
   }
 }
@@ -567,6 +625,7 @@ void leerSerie(){
   String dateTime = "";
   String nombreArchivo = "";
   String ano, mes, dia, hora, minutos, segundos;
+  String directorio = "";
   int anoInt, mesInt, diaInt, horaInt, minutosInt, segundosInt;
   char dateTimeChar[22];
         
@@ -595,6 +654,11 @@ void leerSerie(){
   }
   if(comando == "leerDir"){
       listDir(SD, "/", 0);
+  }  
+ if(comando == "leerSubDir"){
+      directorio += "/";
+      directorio += Serial.readString(); 
+      listSubDir(SD, directorio.c_str(), 0);
   }  
     if(comando == "leerArchivo"){
       nombreArchivo = "/";
