@@ -36,18 +36,23 @@ RTC_DS3231 rtc;
 #include "DHT.h"
 #include "FS.h"
 #include <EEPROM.h>
-#include <tiempoCumplido.h>
-tiempoCumplido tiempoCumplido1(100);
 
+#include <tiempoCumplido.h>
+#include <hardware.h>
+#include <leerEEPROM.h>
+tiempoCumplido tiempoCumplido1(100);
+leerEEPROM leerEEPROM1(addressEEPROM_1kPa, addressEEPROM_2kPa);
+//leerEEPROM leerEEPROM1(80, 84);
+/*
 #define DHTPIN 32               // Pin donde está conectado el sensor de temperatura 
 #define LED_BUILTIN 2           // Parpadea si no encuentra la tarjeta micro SD
 #define sensorPresion1 34       // Sensa la presión dentro del preservativo
 #define sensorPresion2 35       // Sensa la presión dentro del fuelle de sujeción 
 #define pulsadorCalibracion 13  // Si bootea con el pulsador presionado entra en modo calibración de sensores de presión
 
-#define DHTTYPE DHT22           // Sensor DHT22
+#define DHTTYPE DHT22           // Sensor DHT22 */
 DHT dht(DHTPIN, DHTTYPE);
-
+/*
 #define CS 5                   //Pin de Chip Select para escribir el SD
 #define pulsadorInicio 4       //Pulsador de inicio de ensayo. Parada durante el ensayo. Guardar valor durante calibración 
 #define activarElectrovalvula 25    //Activa electroválvula que permite paro de aire para inflado de preservativo y fuelle
@@ -58,7 +63,7 @@ DHT dht(DHTPIN, DHTTYPE);
 #define addressEEPROM_1kPa  80  //Guarda el valor del AD para 1kPa en el sensor 2 (Fuelle)
 #define addressEEPROM_2kPa  84  //Guarda el valor del AD para 2kPa en el sensor 2 (Fuelle)
 #define NUMERO_MAQUINA 1
-
+*/
 //LiquidCrystal_I2C lcd(0x27, 16, 2);
 //LiquidCrystal_I2C lcd(0x27, 20, 4);
 LiquidCrystal_I2C lcd(PCF8574_ADDR_A21_A11_A01, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);
@@ -97,7 +102,7 @@ void appendFile(fs::FS &fs, const char * path, const char * message){
 }
 
 void calibracionSensoresPresion(void);
-void leerEEPROM(void);
+//void leerEEPROM(void);
 void imprimirLCDfijo(String, int, int);
 void mensajeInicialLCDcalibracion(int);
 void mensajeLCDcalibracion(int, float);
@@ -173,13 +178,9 @@ void setup() {
   
   imprimirLCDfijo("Pulse INICIO",0, 0);
   imprimirLCDfijo("para comenzar",0, 1);
-//  imprimirLCDfijo("Feliz dia del",3, 0);
-//  imprimirLCDfijo("INGENIERO",5, 1);
-//  imprimirLCDfijo("2O22",7, 3);
-
 }
 //******************************************************************************************************************
-
+/*
 void  leerEEPROM(){
   //Read data from eeprom
   int address = 0;
@@ -201,7 +202,7 @@ void  leerEEPROM(){
     Serial.println(readId);
     readId = EEPROM.readInt(addressEEPROM_2kPa); 
     Serial.println(readId);
-}
+}*/
 //******* Calibración ***********************************************************************
 void calibracionSensoresPresion(){
       int numeroSensor = 1;
@@ -329,7 +330,8 @@ void calibracionSensoresPresion(){
      imprimirLCDfijo(" Fin de Calibracion",0, 0);
      imprimirLCDfijo("Reinicie el equipo  ",0, 3);
 
-     leerEEPROM();  
+     //leerEEPROM();  
+     leerEEPROM1.obtenerValores();
 }
 //******************** Fin calibración ************************************************************
 void imprimirLCD(String lineaMedicionLCD, int fila){    //Para facilitar la lectura durante el ensayo se actualiza la última medición en la última fila y la  
