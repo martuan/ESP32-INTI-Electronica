@@ -37,75 +37,24 @@ RTC_DS3231 rtc;
 #include "FS.h"
 #include <EEPROM.h>
 
+#include <manejadorSD.h>
 #include <tiempoCumplido.h>
 #include <hardware.h>
 #include <leerEEPROM.h>
+
 tiempoCumplido tiempoCumplido1(100);
 leerEEPROM leerEEPROM1(addressEEPROM_1kPa, addressEEPROM_2kPa);
-//leerEEPROM leerEEPROM1(80, 84);
-/*
-#define DHTPIN 32               // Pin donde está conectado el sensor de temperatura 
-#define LED_BUILTIN 2           // Parpadea si no encuentra la tarjeta micro SD
-#define sensorPresion1 34       // Sensa la presión dentro del preservativo
-#define sensorPresion2 35       // Sensa la presión dentro del fuelle de sujeción 
-#define pulsadorCalibracion 13  // Si bootea con el pulsador presionado entra en modo calibración de sensores de presión
-
-#define DHTTYPE DHT22           // Sensor DHT22 */
+manejadorSD tarjetaSD1(CS);
 DHT dht(DHTPIN, DHTTYPE);
-/*
-#define CS 5                   //Pin de Chip Select para escribir el SD
-#define pulsadorInicio 4       //Pulsador de inicio de ensayo. Parada durante el ensayo. Guardar valor durante calibración 
-#define activarElectrovalvula 25    //Activa electroválvula que permite paro de aire para inflado de preservativo y fuelle
-#define EEPROM_SIZE 420 //Se usaran 20 enteros => 4by * 20    //Utilizado para guardar las constantes de calibración de los sensores de presión
-                                                              //Sensor 1 , se guardan pendientes y ordenadas al origen (Se linealiza la curva en 10 segmentos)
-                                                              //Sensor 2 , se guardan los valores digitales del AD correspondientes a 1kPa y 2kPa. Aqui solo interesa
-                                                              //que el valor se mantenga en este rango durante el ensayo. 
-#define addressEEPROM_1kPa  80  //Guarda el valor del AD para 1kPa en el sensor 2 (Fuelle)
-#define addressEEPROM_2kPa  84  //Guarda el valor del AD para 2kPa en el sensor 2 (Fuelle)
-#define NUMERO_MAQUINA 1
-*/
-//LiquidCrystal_I2C lcd(0x27, 16, 2);
-//LiquidCrystal_I2C lcd(0x27, 20, 4);
 LiquidCrystal_I2C lcd(PCF8574_ADDR_A21_A11_A01, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);
 
 //Rutina que crea en archivo de registro de nuevo ensayo, lo nombra según formato ISO8601 y Escribe dentro de el el encabezado del ensayo
-void writeFile(fs::FS &fs, const char * path, const char * message){
-    Serial.println();
-    Serial.printf("Writing file: %s\n", path);
-  
-  File file = fs.open(path, FILE_APPEND);
-    if(!file){
-        Serial.println("Failed to open file for appending");
-        return;
-    }
-    if(file.print(message)){
-        Serial.println("File appended");
-    } else {
-        Serial.println("Write failed");
-    }
-    file.close();
-}
-
-void appendFile(fs::FS &fs, const char * path, const char * message){
-//    Serial.printf("Appending to file: %s\n", path);
-    File file = fs.open(path, FILE_APPEND);
-    if(!file){
-        Serial.println("Failed to open file for appending");
-        return;
-    }
-    if(file.print(message)){
-//        Serial.println("Message appended");
-    } else {
-        Serial.println("Append failed");
-    }
-    file.close();
-}
-
 void calibracionSensoresPresion(void);
 //void leerEEPROM(void);
 void imprimirLCDfijo(String, int, int);
 void mensajeInicialLCDcalibracion(int);
 void mensajeLCDcalibracion(int, float);
+void fallaEscrituraSD(void);
 
 void setup() {
 
@@ -115,45 +64,38 @@ void setup() {
   pinMode(pulsadorCalibracion, INPUT);
 
   boolean calibracion;
+  boolean memoriaSDinicializada = false;
   //********************************************
   // Open serial communications and wait for port to open:
   Serial.begin(115200);
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
   }
-    // initialize the LCD
+    // initializar the LCD
   lcd.begin(20,4);
-  //lcd.begin();
-
-  // Turn on the blacklight and print a message.
+   // Turn on the blacklight and print a message.
   lcd.backlight();
   lcd.print("INTI CAUCHOS");
-
-  if (!SD.begin(CS)) {
+  memoriaSDinicializada = tarjetaSD1.inicializarSD();
+//  if (!SD.begin(CS)) {
+    if(!memoriaSDinicializada){
       Serial.println("inicialización fallida!"); 
       lcd.setCursor(0, 0);
       lcd.print("SD NO encontrada");
-     while(!SD.begin(CS)){
+     //while(!SD.begin(CS)){
+    while(!memoriaSDinicializada){
         digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
         lcd.backlight();
         delay(500);                       // wait for a half second
         digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
         lcd.noBacklight();
         delay(500);                       // wait for a half second
+        memoriaSDinicializada = tarjetaSD1.inicializarSD();
      }
       lcd.backlight();
       lcd.clear();
-  //  return;
-  } else {
-    Serial.println("initialization done.");
-  }
-  
-   uint8_t cardType = SD.cardType();
 
-    if(cardType == CARD_NONE){
-        Serial.println("No SD card attached");
-        return;
-    }
+  } 
   // **********************************************************************
   if (! rtc.begin()) {
     //   Serial.println("Couldn't find RTC");
@@ -164,45 +106,12 @@ void setup() {
     //    Serial.println("RTC lost power, lets set the time!");
   }
   //**********************************************************************
-    dht.begin();    //Inicializar sensor de temperatura
- // dht.setup(dhtPin, DHTesp::DHT11);
+  dht.begin();    //Inicializar sensor de temperatura
   EEPROM.begin(EEPROM_SIZE);
-      // leerEEPROM();
-  
-  String str = "/Maquina_";              //El nombre del archivo corresponde al número de máquina
-  str += String(NUMERO_MAQUINA);
-  File archivo = SD.open(str.c_str());   //Si no existe el archivo lo crea. Aqui se guardan el último dato de cada ensayo ya sea, tiempo y presión de reventado, 
-  if(!archivo) {                              //fin por timeout, presión de fuelle fuera de rango o parada por usuario (pulsador inicio)
-      // writeFile(SD, str.c_str(), "Nombre archivo, Segundos, Estado final\r");
-  }    
-  
+   
   imprimirLCDfijo("Pulse INICIO",0, 0);
   imprimirLCDfijo("para comenzar",0, 1);
 }
-//******************************************************************************************************************
-/*
-void  leerEEPROM(){
-  //Read data from eeprom
-  int address = 0;
-  int cont = 0;
-  int readId;
-  while(cont<10){
-    readId = EEPROM.readInt(address); //EEPROM.get(address,readId);
-    Serial.print("Read m = ");
-    Serial.println(readId);
-    address += sizeof(readId); //update address value  
-    readId = EEPROM.readInt(address); //EEPROM.get(address,readId);
-    Serial.print("Read b = ");
-    Serial.println(readId);
-    address += sizeof(readId); //update address value  
-    cont ++;    
-  }
-    Serial.print("Sensor Nº 2: ");
-    readId = EEPROM.readInt(addressEEPROM_1kPa); 
-    Serial.println(readId);
-    readId = EEPROM.readInt(addressEEPROM_2kPa); 
-    Serial.println(readId);
-}*/
 //******* Calibración ***********************************************************************
 void calibracionSensoresPresion(){
       int numeroSensor = 1;
@@ -390,35 +299,6 @@ void imprimirPC(DateTime now, float temp, float humed){
       Serial.println();
   }
 //*******************************************************************************
-/*
-boolean  tiempoCumplido(boolean ejecutado){
-  const int intervalo = 10;      // Cantidad de milisegundos
-  const int intervalosLimite = 100;   //Cantidad de intervalos entre medición y registro de datos (Presión y caudal). intervalo * intervalosLimite =  segundos
-  static boolean tiempoCumplido;
-  static unsigned long previousMillis = 0;
-  static unsigned long currentMillis = 0;
-  static int intervalosContados = 0;
-
-  if(ejecutado){
-    intervalosContados = 0;
-  }
-
-   currentMillis = millis();
-  if (currentMillis - previousMillis >= intervalo) {
-    previousMillis = currentMillis; 
-    intervalosContados++; 
-  }  
-  if(intervalosContados >= intervalosLimite){
-    tiempoCumplido = true;
-//    intervalosContados = 0;
-  }else{
-    tiempoCumplido = false;
-  }
-  if(tiempoCumplido == true)  return(true);
-  else  return(false);
-}
-*/
-//***************************************************************************************
 void imprimirLCDfijo(String lineaMedicionLCD, int columna, int fila){
 
     lcd.setCursor(0, fila);
@@ -463,6 +343,13 @@ float obtenerPresion1(void){
   return presion1;
 }
 //***********************************************************************************
+void fallaEscrituraSD(){
+  imprimirLCDfijo("                    ",0, 0);
+  imprimirLCDfijo(" Falla Escritura SD ",0, 1);
+  imprimirLCDfijo("                    ",0, 2);
+  imprimirLCDfijo("                    ",0, 3);
+}
+//***********************************************************************************
 void rutinaEnsayo(String nombreArchivo){
   const int timeOut = 30;
   int segundos = 0;
@@ -485,6 +372,7 @@ void rutinaEnsayo(String nombreArchivo){
   boolean superoPresionMinima = false;            //Por debajo de 0.1 kPa tiene mucho error y no se considera la medicion.
   String nombreMaquina = "/Maquina_";  
   String lineaMedicionLCD = ""; 
+  boolean datoAnexadoEnSD;
              
   nombreMaquina += String(NUMERO_MAQUINA);        //El nombre del archivo corresponde al número de máquina
   nombreMaquina += ".csv";
@@ -508,7 +396,7 @@ void rutinaEnsayo(String nombreArchivo){
         lineaMedicionLCD += lineaMedicion;
         lineaMedicion += "\r\n";
         Serial.print(lineaMedicion);         //Si se quita el envío al puerto serie, agregar delay(10) para que escriba bien en la sd el fin de línea
-        appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());   
+        datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());   
         segundos ++;
         imprimirLCD(String(lineaMedicionLCD), 2);
         lineaMedicionLCD = "";
@@ -523,7 +411,7 @@ void rutinaEnsayo(String nombreArchivo){
         escribeUltimaMedicion += ", ";
         escribeUltimaMedicion += lineaMedicionAnterior;
         
-        appendFile(SD, nombreMaquina.c_str(), escribeUltimaMedicion.c_str());
+        datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreMaquina.c_str(), escribeUltimaMedicion.c_str());
         segundos = timeOut + 1;       //No vuenve a entrar en  while(segundos < timeOut) ni entra en if(segundos == timeOut)
        Serial.print("Linea Medición anterior: ");
        Serial.println(lineaMedicionAnterior);
@@ -552,9 +440,9 @@ void rutinaEnsayo(String nombreArchivo){
       imprimirLCD(String(lineaMedicionLCD), 2);
       lineaMedicion += "Fin de ensayo por Time Out \r\n"; 
       lineaMedicionNombreArchivo += "Fin de ensayo por Time Out \r\n"; 
-      appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());                 //Escribe última medición antes de reventado en archivo de este ensayo
+      datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());                 //Escribe última medición antes de reventado en archivo de este ensayo
       Serial.println("Fin de ensayo por Time Out");
-      appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
+      datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
    }     
    
    //  delay(200);
@@ -563,9 +451,9 @@ void rutinaEnsayo(String nombreArchivo){
   //    lineaMedicionLCD +=  "Fin por Usuario";
       lineaMedicion += "Fin de ensayo por parada de usuario \r\n"; 
       lineaMedicionNombreArchivo += "Fin de ensayo por parada de usuario \r\n"; 
-      appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());                 //Escribe última medición antes de reventado en archivo de este ensayo
+      datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());                 //Escribe última medición antes de reventado en archivo de este ensayo
       Serial.println("Fin de ensayo por parada de usuario");
-      appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
+      datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
       segundos = timeOut + 1;         //Para que salga del While
       digitalWrite(activarElectrovalvula, LOW);
       imprimirLCD("Fin por Usuario", 2);
@@ -581,9 +469,9 @@ void rutinaEnsayo(String nombreArchivo){
     if(bajaPresionFuelle == HIGH){
       lineaMedicion += "Fin de ensayo por baja presión en fuelle \r\n"; 
       lineaMedicionNombreArchivo += "Fin de ensayo por baja presión en fuelle \r\n"; 
-      appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());                 //Escribe última medición antes de reventado en archivo de este ensayo    
+      datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());                 //Escribe última medición antes de reventado en archivo de este ensayo    
       Serial.println("Fin de ensayo por baja presión en fuelle");
-      appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
+      datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
       segundos = timeOut + 1;       //Para que salga del While
       imprimirLCD("Baja Presion Fuelle",2);
       delay(300);
@@ -591,24 +479,19 @@ void rutinaEnsayo(String nombreArchivo){
     if(altaPresionFuelle == HIGH){
       lineaMedicion += "Fin de ensayo por alta presión en fuelle \r\n"; 
       lineaMedicionNombreArchivo += "Fin de ensayo por alta presión en fuelle \r\n"; 
-      appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());               //Escribe última medición antes de reventado en archivo de este ensayo  
+      datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());               //Escribe última medición antes de reventado en archivo de este ensayo  
       Serial.println("Fin de ensayo por alta presión en fuelle");
-      appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());  //Escribe última medición antes de reventado en archivo Maquina_#
+      datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());  //Escribe última medición antes de reventado en archivo Maquina_#
       segundos = timeOut + 1;       //Para que salga del While
       imprimirLCD("Alta Presion Fuelle",2);
       delay(300);
     }
+    if(!datoAnexadoEnSD){
+      segundos = timeOut + 1;       //Para que salga del While  
+      fallaEscrituraSD();
+    }
   }
   digitalWrite(activarElectrovalvula, LOW);
-}
-//********************************************************************************
-void createDir(fs::FS &fs, const char * path){
-  Serial.printf("Creating Dir: %s\n", path);
-  if(fs.mkdir(path)){
-    Serial.println("Dir created");
-  } else {
-    Serial.println("mkdir failed");
-  }
 }
 //********************************************************************************
 String rutinaInicioEnsayo(){
@@ -616,7 +499,7 @@ String rutinaInicioEnsayo(){
     String cabecera = "";
     String nombreDirectorio = "";
     String tempHumedadLCD = "";
-    boolean directorioExistente = false;
+    boolean datoAnexadoEnSD;
     
     float temp = dht.readTemperature(); //Leemos la temperatura en grados Celsius
     float humed = dht.readHumidity(); //Leemos la Humedad
@@ -633,21 +516,16 @@ String rutinaInicioEnsayo(){
     sprintf(dateISO, "%02d%02d%02d", now.year(), now.month(),now.day()); 
     nombreDirectorio += "/";
     nombreDirectorio += String(dateISO);
-    directorioExistente = SD.exists(nombreDirectorio.c_str());
-    if(directorioExistente){
-      
-    }else{
-      createDir(SD,nombreDirectorio.c_str());
-    }
-//    char dateTimeISO[17];
+    tarjetaSD1.createDir(SD,nombreDirectorio.c_str());
+
     char dateTimeISO[26];
     sprintf(dateTimeISO, "%02d%02d%02dT%02d%02d%02d", now.year(), now.month(),now.day(),  now.hour(), now.minute(), now.second()); 
     nombreArchivo += nombreDirectorio;
     nombreArchivo += "/";
     nombreArchivo += String(dateTimeISO);
     nombreArchivo += ".csv";
-    writeFile(SD, nombreArchivo.c_str(), "Máquina número:, 01 \r\n");
-    appendFile(SD, nombreArchivo.c_str(), "Fecha  y  hora, Temperatura, Humedad \r\n");
+    tarjetaSD1.writeFile(SD, nombreArchivo.c_str(), "Máquina número:, 01 \r\n");
+    datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), "Fecha  y  hora, Temperatura, Humedad \r\n");
     imprimirLCDfijo(String(tempHumedadLCD),3, 0);
     imprimirLCDfijo(String(dateTimeISO),2, 1);
         
@@ -660,12 +538,15 @@ String rutinaInicioEnsayo(){
     cabecera += String(humed);
     cabecera += "\r\n";
     imprimirPC(now, temp, humed);
-    appendFile(SD, nombreArchivo.c_str(), cabecera.c_str());
+    datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), cabecera.c_str());
     String str = nombreArchivo.c_str();  
-
+    if(!datoAnexadoEnSD){
+      fallaEscrituraSD();
+    }
   return str; 
 }
 //**************************************************************************************************
+/*
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels){   //
   Serial.println("");
   Serial.printf("Listado de directorio: %s\n", dirname);
@@ -743,7 +624,7 @@ void leerFile(fs::FS &fs, const char * path){
     Serial.write(file.read());
   }
   file.close();
-}
+}*/
 //******************************************************************************************
 void leerSerie(){
   String comando = "";
@@ -778,17 +659,17 @@ void leerSerie(){
 
   }
   if(comando == "leerDir"){
-      listDir(SD, "/", 0);
+      tarjetaSD1.listDir(SD, "/", 0);
   }  
  if(comando == "leerSubDir"){
       directorio += "/";
       directorio += Serial.readString(); 
-      listSubDir(SD, directorio.c_str(), 0);
+      tarjetaSD1.listSubDir(SD, directorio.c_str(), 0);
   }  
     if(comando == "leerArchivo"){
       nombreArchivo = "/";
       nombreArchivo += Serial.readString();
-      leerFile(SD, nombreArchivo.c_str());
+      tarjetaSD1.leerFile(SD, nombreArchivo.c_str());
   }  
 }
 //**************************************************************************************  

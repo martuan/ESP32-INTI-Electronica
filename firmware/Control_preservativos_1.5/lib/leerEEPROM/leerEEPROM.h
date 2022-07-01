@@ -4,8 +4,7 @@
 #include <Arduino.h>
 #include <EEPROM.h>
 
-class  leerEEPROM
-{
+class  leerEEPROM   {
     public:
         leerEEPROM(int direccionEEPROM_1kPa, int direccionEEPROM_2kPa);   
         void obtenerValores();
