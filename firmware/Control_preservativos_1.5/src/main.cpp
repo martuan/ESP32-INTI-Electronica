@@ -41,19 +41,20 @@ RTC_DS3231 rtc;
 #include <tiempoCumplido.h>
 #include <hardware.h>
 #include <leerEEPROM.h>
+#include <imrpimirLCDI2C.h>
 
 tiempoCumplido tiempoCumplido1(100);
 leerEEPROM leerEEPROM1(addressEEPROM_1kPa, addressEEPROM_2kPa);
 manejadorSD tarjetaSD1(CS);
 DHT dht(DHTPIN, DHTTYPE);
-LiquidCrystal_I2C lcd(PCF8574_ADDR_A21_A11_A01, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);
+LiquidCrystal_I2C lcd1(PCF8574_ADDR_A21_A11_A01, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);  //PCF8574_ADDR_A21_A11_A01 -> dicección I2C del display físico  0X27
+LiquidCrystal_I2C lcd2(PCF8574_ADDR_A21_A11_A00, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);  //PCF8574_ADDR_A21_A11_A00 -> dicección I2C del display físico 0X26
+
+imrpimirLCDI2C imprimirLcd1(lcd1);
+imrpimirLCDI2C imprimirLcd2(lcd2);
 
 //Rutina que crea en archivo de registro de nuevo ensayo, lo nombra según formato ISO8601 y Escribe dentro de el el encabezado del ensayo
 void calibracionSensoresPresion(void);
-//void leerEEPROM(void);
-void imprimirLCDfijo(String, int, int);
-void mensajeInicialLCDcalibracion(int);
-void mensajeLCDcalibracion(int, float);
 void fallaEscrituraSD(void);
 
 void setup() {
@@ -71,30 +72,25 @@ void setup() {
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
   }
-    // initializar the LCD
-  lcd.begin(20,4);
-   // Turn on the blacklight and print a message.
-  lcd.backlight();
-  lcd.print("INTI CAUCHOS");
+  imprimirLcd1.inicializarLCD(20, 4);
+  imprimirLcd2.inicializarLCD(16, 2);
+ 
+  imprimirLcd1.imprimirLCDfijo("  INTI CAUCHOS",0, 0);
+  imprimirLcd2.imprimirLCDfijo("HOLA MUNDO",0, 0);
+
   memoriaSDinicializada = tarjetaSD1.inicializarSD();
-//  if (!SD.begin(CS)) {
     if(!memoriaSDinicializada){
       Serial.println("inicialización fallida!"); 
-      lcd.setCursor(0, 0);
-      lcd.print("SD NO encontrada");
-     //while(!SD.begin(CS)){
+      imprimirLcd1.imprimirLCDfijo("SD NO encontrada",0, 0);
     while(!memoriaSDinicializada){
         digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
-        lcd.backlight();
+        lcd1.backlight();
         delay(500);                       // wait for a half second
         digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
-        lcd.noBacklight();
+        lcd1.noBacklight();
         delay(500);                       // wait for a half second
         memoriaSDinicializada = tarjetaSD1.inicializarSD();
      }
-      lcd.backlight();
-      lcd.clear();
-
   } 
   // **********************************************************************
   if (! rtc.begin()) {
@@ -109,8 +105,8 @@ void setup() {
   dht.begin();    //Inicializar sensor de temperatura
   EEPROM.begin(EEPROM_SIZE);
    
-  imprimirLCDfijo("Pulse INICIO",0, 0);
-  imprimirLCDfijo("para comenzar",0, 1);
+  imprimirLcd1.imprimirLCDfijo("Pulse INICIO",0, 0);
+  imprimirLcd1.imprimirLCDfijo("para comenzar",0, 1);
 }
 //******* Calibración ***********************************************************************
 void calibracionSensoresPresion(){
@@ -130,7 +126,7 @@ void calibracionSensoresPresion(){
       boolean calibracion;
       boolean cambioSensor = LOW; 
      
-      mensajeInicialLCDcalibracion(numeroSensor);
+      imprimirLcd1.mensajeInicialLCDcalibracion(numeroSensor);
       Serial.println("Con pulsador CALIBRACION seleccione sensor: ");
       Serial.print("Sensor seleccionado: ");
       Serial.println(numeroSensor);
@@ -150,7 +146,7 @@ void calibracionSensoresPresion(){
       if(cambioSensor == HIGH){
         Serial.print("Sensor seleccionado: ");
         Serial.println(numeroSensor);
-        imprimirLCDfijo(String(numeroSensor),5, 1);    
+        imprimirLcd1.imprimirLCDfijo(String(numeroSensor),5, 1);    
         Serial.println("Pulse INICIO para comenzar calibración");    
         cambioSensor = LOW;       
       }
@@ -164,7 +160,7 @@ void calibracionSensoresPresion(){
           Serial.print("º. Desde Cero suba la presión hasta ");
           Serial.print(valorCalibracion[puntoCalibracion]);
           Serial.println("kPa  y presione INICIO");
-          mensajeLCDcalibracion((muestraPorPunto + 1), valorCalibracion[puntoCalibracion]);
+          imprimirLcd1.mensajeLCDcalibracion((muestraPorPunto + 1), valorCalibracion[puntoCalibracion]);
           inicio = digitalRead(pulsadorInicio);
           while(inicio == HIGH){
             inicio = digitalRead(pulsadorInicio);
@@ -179,7 +175,7 @@ void calibracionSensoresPresion(){
         valorAcumulado = 0;
         puntoCalibracion ++;
        }
-       imprimirLCDfijo(" Sensor 1          ",0, 2); 
+       imprimirLcd1.imprimirLCDfijo(" Sensor 1          ",0, 2); 
        
         m = int((valorDigitalCalibrado[1] - valorDigitalCalibrado[0])/0.25);
   //      m = int((valorDigitalCalibrado[1] - valorDigitalCalibrado[0])/(valorCalibracion[1] - valorCalibracion[0]));
@@ -209,7 +205,7 @@ void calibracionSensoresPresion(){
      }
      if(numeroSensor == 2){
         Serial.println("Suba la presión a 1kPa  y presione INICIO");
-        mensajeLCDcalibracion(1, 1);
+        imprimirLcd1.mensajeLCDcalibracion(1, 1);
 
         inicio = HIGH;          
         while(inicio == HIGH){
@@ -222,7 +218,7 @@ void calibracionSensoresPresion(){
         Serial.println(valorPresionFuelle);
         delay(800);
         Serial.println("Suba la presión a 2kPa  y presione INICIO");
-        mensajeLCDcalibracion(1, 2);
+        imprimirLcd1.mensajeLCDcalibracion(1, 2);
         inicio = HIGH;          
         while(inicio == HIGH){
           inicio = digitalRead(pulsadorInicio);          
@@ -233,56 +229,17 @@ void calibracionSensoresPresion(){
         Serial.print("El valor para 2kPa es: ");         
         Serial.println(valorPresionFuelle);
         delay(800);                   
-       imprimirLCDfijo(" Sensor 2          ",0, 2);
+       imprimirLcd1.imprimirLCDfijo(" Sensor 2          ",0, 2);
      }
-     imprimirLCDfijo("                    ",0, 1);
-     imprimirLCDfijo(" Fin de Calibracion",0, 0);
-     imprimirLCDfijo("Reinicie el equipo  ",0, 3);
+     imprimirLcd1.imprimirLCDfijo("                    ",0, 1);
+     imprimirLcd1.imprimirLCDfijo(" Fin de Calibracion",0, 0);
+     imprimirLcd1.imprimirLCDfijo("Reinicie el equipo  ",0, 3);
 
      //leerEEPROM();  
      leerEEPROM1.obtenerValores();
 }
 //******************** Fin calibración ************************************************************
-void imprimirLCD(String lineaMedicionLCD, int fila){    //Para facilitar la lectura durante el ensayo se actualiza la última medición en la última fila y la  
-  static String lineaMedicionLCDanterior = "";          //medición anterior se corre hacia arriba
-//    lcd.clear();
-    lcd.setCursor(0, fila);
-    lcd.print("                   ");
-    lcd.setCursor(0, fila);
-    lcd.print(lineaMedicionLCDanterior);
-    lcd.setCursor(0, (fila + 1));
-    lcd.print("                   ");
-    lcd.setCursor(0, (fila + 1));
-    lcd.print(lineaMedicionLCD);    
-    lineaMedicionLCDanterior = lineaMedicionLCD;
-  
-}
-//***************************************************************************************
-void mensajeInicialLCDcalibracion(int numeroSensor){
-    imprimirLCDfijo("Con pulsador",0, 0);
-    imprimirLCDfijo("CALIBRACION",0, 1);
-    imprimirLCDfijo("seleccione sensor",0, 2);
-    delay(5000);
-    lcd.clear();
-    imprimirLCDfijo("Sensor seleccionado:",0, 0);
-    imprimirLCDfijo(String(numeroSensor),0, 1);              
-    imprimirLCDfijo("Presionar pulsador",0, 2);         
-    imprimirLCDfijo("INICIO para calibrar",0, 3);         
-}
-//**************************************************************************************************
 
-void mensajeLCDcalibracion(int muestraPorPunto, float puntoCalibracion){
-      String linea_1 = String(muestraPorPunto);
-      String linea_2 = "hasta: ";
-      linea_1 += " Suba desde cero";
-      linea_2 += String(puntoCalibracion);
-      linea_2 += " kPa";
-      imprimirLCDfijo(linea_1,0, 0);         
-      imprimirLCDfijo(linea_2,0, 1);         
-      imprimirLCDfijo("y presione",0, 2);         
-      imprimirLCDfijo("INICIO",0, 3);         
-
-}
 //**************************************************************************************************
 void imprimirPC(DateTime now, float temp, float humed){
       char dateTime[22];
@@ -298,15 +255,6 @@ void imprimirPC(DateTime now, float temp, float humed){
       Serial.print(humed);
       Serial.println();
   }
-//*******************************************************************************
-void imprimirLCDfijo(String lineaMedicionLCD, int columna, int fila){
-
-    lcd.setCursor(0, fila);
-    lcd.print("                    ");
-    lcd.setCursor(columna, fila);
-    lcd.print(lineaMedicionLCD);    
-  
-}
 //***************************************************************************************
 float obtenerPresion1(void){
   int lecturaAD1;
@@ -344,10 +292,10 @@ float obtenerPresion1(void){
 }
 //***********************************************************************************
 void fallaEscrituraSD(){
-  imprimirLCDfijo("                    ",0, 0);
-  imprimirLCDfijo(" Falla Escritura SD ",0, 1);
-  imprimirLCDfijo("                    ",0, 2);
-  imprimirLCDfijo("                    ",0, 3);
+  imprimirLcd1.imprimirLCDfijo("                    ",0, 0);
+  imprimirLcd1.imprimirLCDfijo(" Falla Escritura SD ",0, 1);
+  imprimirLcd1.imprimirLCDfijo("                    ",0, 2);
+  imprimirLcd1.imprimirLCDfijo("                    ",0, 3);
 }
 //***********************************************************************************
 void rutinaEnsayo(String nombreArchivo){
@@ -398,7 +346,7 @@ void rutinaEnsayo(String nombreArchivo){
         Serial.print(lineaMedicion);         //Si se quita el envío al puerto serie, agregar delay(10) para que escriba bien en la sd el fin de línea
         datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());   
         segundos ++;
-        imprimirLCD(String(lineaMedicionLCD), 2);
+        imprimirLcd1.imprimirMedicionLCD(String(lineaMedicionLCD), 2);
         lineaMedicionLCD = "";
         registrarDatos = tiempoCumplido1.calcularTiempo(true);
         guardarLineaMedicionAnterior = true;
@@ -437,7 +385,7 @@ void rutinaEnsayo(String nombreArchivo){
    if(segundos == timeOut){
       lineaMedicionLCD += lineaMedicion;
       lineaMedicionLCD +=  " Time Out";
-      imprimirLCD(String(lineaMedicionLCD), 2);
+      imprimirLcd1.imprimirMedicionLCD(String(lineaMedicionLCD), 2);
       lineaMedicion += "Fin de ensayo por Time Out \r\n"; 
       lineaMedicionNombreArchivo += "Fin de ensayo por Time Out \r\n"; 
       datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());                 //Escribe última medición antes de reventado en archivo de este ensayo
@@ -456,7 +404,7 @@ void rutinaEnsayo(String nombreArchivo){
       datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
       segundos = timeOut + 1;         //Para que salga del While
       digitalWrite(activarElectrovalvula, LOW);
-      imprimirLCD("Fin por Usuario", 2);
+      imprimirLcd1.imprimirMedicionLCD("Fin por Usuario", 2);
       delay(1500);
    }
 
@@ -473,7 +421,7 @@ void rutinaEnsayo(String nombreArchivo){
       Serial.println("Fin de ensayo por baja presión en fuelle");
       datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
       segundos = timeOut + 1;       //Para que salga del While
-      imprimirLCD("Baja Presion Fuelle",2);
+      imprimirLcd1.imprimirMedicionLCD("Baja Presion Fuelle",2);
       delay(300);
     }
     if(altaPresionFuelle == HIGH){
@@ -483,7 +431,8 @@ void rutinaEnsayo(String nombreArchivo){
       Serial.println("Fin de ensayo por alta presión en fuelle");
       datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());  //Escribe última medición antes de reventado en archivo Maquina_#
       segundos = timeOut + 1;       //Para que salga del While
-      imprimirLCD("Alta Presion Fuelle",2);
+      imprimirLcd1.imprimirMedicionLCD("Alta Presion Fuelle",2);
+      //imprimirLCD("Alta Presion Fuelle",2);
       delay(300);
     }
     if(!datoAnexadoEnSD){
@@ -526,8 +475,8 @@ String rutinaInicioEnsayo(){
     nombreArchivo += ".csv";
     tarjetaSD1.writeFile(SD, nombreArchivo.c_str(), "Máquina número:, 01 \r\n");
     datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), "Fecha  y  hora, Temperatura, Humedad \r\n");
-    imprimirLCDfijo(String(tempHumedadLCD),3, 0);
-    imprimirLCDfijo(String(dateTimeISO),2, 1);
+    imprimirLcd1.imprimirLCDfijo(String(tempHumedadLCD),3, 0);
+    imprimirLcd1.imprimirLCDfijo(String(dateTimeISO),2, 1);
         
     char dateTime[20];
     sprintf(dateTime, "%02d/%02d/%02d %02d:%02d:%02d", now.year(), now.month(), now.day(),  now.hour(), now.minute(), now.second()); 
@@ -545,86 +494,7 @@ String rutinaInicioEnsayo(){
     }
   return str; 
 }
-//**************************************************************************************************
-/*
-void listDir(fs::FS &fs, const char * dirname, uint8_t levels){   //
-  Serial.println("");
-  Serial.printf("Listado de directorio: %s\n", dirname);
 
-  File root = fs.open(dirname);
-  if(!root){
-    Serial.println("Failed to open directory");
-    return;
-  }
-  if(!root.isDirectory()){
-    Serial.println("Not a directory");
-    return;
-  }
-
-  File file = root.openNextFile();
-  while(file){
-    if(file.isDirectory()){
-      Serial.print("  DIR : ");
-      Serial.println(file.name());     
-      if(levels){
-        listDir(fs, file.name(), levels -1);
-      }
-    }else {
-      Serial.print("  Archivo: ");
-      Serial.print(file.name());
-      Serial.print("  Tamaño: ");
-      Serial.println(file.size());
-    }
- //     Serial.println("");
-    file = root.openNextFile();
-  }
-}
-//*******************************************************************************************************
-void listSubDir(fs::FS &fs, const char * dirname, uint8_t levels){      //Devuelve el contenido del directorio. Ej.: Enviando "leerSubDir:/20220601" devuelve el contenido dentro del directorio /20220601
-  Serial.println("");
-  Serial.printf("Listado de directorio: %s\n", dirname);
-
-  File root = fs.open(dirname);
-  if(!root){
-    Serial.println("Failed to open directory");
-    return;
-  }
-  if(!root.isDirectory()){
-    Serial.println("Not a directory");
-    return;
-  }
-String rutaNombre = "";
-String nombre = "";
-  File file = root.openNextFile();
-  while(file){
-    if(file.isDirectory()){
-      rutaNombre = file.name();
-      nombre = rutaNombre.substring(9);
-      Serial.println(nombre);
-      if(levels){
-        listDir(fs, file.name(), levels -1);
-      }
-    }
-    file = root.openNextFile();
-  }
-}
-
-//**************************************************************************************
-void leerFile(fs::FS &fs, const char * path){
-  Serial.printf("Leyendo archivo: %s\n", path);
-
-  File file = fs.open(path);
-  if(!file){
-    Serial.println("Failed to open file for reading");
-    return;
-  }
-
-  Serial.println("Datos del archivo: ");
-  while(file.available()){
-    Serial.write(file.read());
-  }
-  file.close();
-}*/
 //******************************************************************************************
 void leerSerie(){
   String comando = "";
