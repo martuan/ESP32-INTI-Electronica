@@ -1,4 +1,9 @@
-/*  Version 1
+/*  
+ *
+ *	Programado por: Martín Cioffi
+ *  Fecha: 05-07-2022
+ *
+ *	Version 1
  *  
  *  ESP32/ESP8266 example of downloading and uploading a file from or to the device's Filing System
  *  
@@ -26,13 +31,12 @@
   #include <ESP8266WebServer.h>  // Built-in
   #include <ESP8266mDNS.h>
 #else
-  #include <WiFi.h>              // Built-in
-  #include <WiFiMulti.h>         // Built-in
-  #include <ESP32WebServer.h>    // https://github.com/Pedroalbuquerque/ESP32WebServer download and place in your Libraries folder
-  #include <ESPmDNS.h>
-  #include "FS.h"
-  #include <AsyncTCP.h>
-//	#include <ESPAsyncWebServer.h>
+	#include <WiFi.h>              // Built-in
+	#include <WiFiMulti.h>         // Built-in
+	#include <ESP32WebServer.h>    // https://github.com/Pedroalbuquerque/ESP32WebServer download and place in your Libraries folder
+	#include <ESPmDNS.h>
+	#include "FS.h"
+	#include <AsyncTCP.h>
 	#include "SPIFFS.h"
 #endif
 
@@ -48,7 +52,6 @@
 #else
   WiFiMulti wifiMulti;
   ESP32WebServer server(80);
-  //AsyncWebServer server(80);
 #endif
 
 void HomePage();
@@ -111,20 +114,22 @@ void setup(void){
         Serial.println(WiFi.localIP());
         delay(5000);
       }
-	  /*
-  if (!WiFi.config(local_IP, gateway, subnet, dns)) { //WiFi.config(ip, gateway, subnet, dns1, dns2);
-    Serial.println("WiFi STATION Failed to configure Correctly"); 
-  } 
-  wifiMulti.addAP(ssid_1, password_1);  // add Wi-Fi networks you want to connect to, it connects strongest to weakest
-  wifiMulti.addAP(ssid_2, password_2);  // Adjust the values in the Network tab
-  wifiMulti.addAP(ssid_3, password_3);
-  wifiMulti.addAP(ssid_4, password_4);  // You don't need 4 entries, this is for example!
-  
-  Serial.println("Connecting ...");
-  while (wifiMulti.run() != WL_CONNECTED) { // Wait for the Wi-Fi to connect: scan for Wi-Fi networks, and connect to the strongest of the networks above
-    delay(250); Serial.print('.');
-  }
-  */
+	/*
+	//************************CONFIG MULTIWIFI***************************************
+
+		if (!WiFi.config(local_IP, gateway, subnet, dns)) { //WiFi.config(ip, gateway, subnet, dns1, dns2);
+			Serial.println("WiFi STATION Failed to configure Correctly"); 
+		} 
+		wifiMulti.addAP(ssid_1, password_1);  // add Wi-Fi networks you want to connect to, it connects strongest to weakest
+		wifiMulti.addAP(ssid_2, password_2);  // Adjust the values in the Network tab
+		wifiMulti.addAP(ssid_3, password_3);
+		wifiMulti.addAP(ssid_4, password_4);  // You don't need 4 entries, this is for example!
+		
+		Serial.println("Connecting ...");
+		while (wifiMulti.run() != WL_CONNECTED) { // Wait for the Wi-Fi to connect: scan for Wi-Fi networks, and connect to the strongest of the networks above
+			delay(250); Serial.print('.');
+		}
+	*/
   Serial.println("\nConnected to "+WiFi.SSID()+" Use IP address: "+WiFi.localIP().toString()); // Report which SSID and IP is in use
   // The logical name http://fileserver.local will also access the device if you have 'Bonjour' running or your system supports multicast dns
   if (!MDNS.begin(servername)) {          // Set your preferred server name, if you use "myserver" the address would be http://myserver.local/
@@ -149,39 +154,19 @@ void setup(void){
   // Note: Using the ESP32 and SD_Card readers requires a 1K to 4K7 pull-up to 3v3 on the MISO line, otherwise they do-not function.
   //----------------------------------------------------------------------   
   ///////////////////////////// Server Commands 
-  //server.on("/",         HomePage);
-	// Web Server Root URL
-	/*
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send(SPIFFS, "/index.html", "text/html");
-  });
-  */
-/*
-	server.on("/", HTTP_GET, [](ESP32WebServer *request){
-    	request->send(SPIFFS, "/index.html", "text/html");
-  	});
-  */
- server.on("/", HomePage);
-  server.on("/download", File_Download);
-  //server.on("/upload",   File_Upload);
-  //server.on("/fupload",  HTTP_POST,[](){ server.send(200);}, handleFileUpload);
-  //server.on("/stream",   File_Stream);
-  server.on("/delete",   File_Delete);
-  server.on("/dir",      SD_dir);
-  server.on("/consultarPorFecha", ConsultarPorFecha);
+
+	server.on("/", HomePage);
+	server.on("/download", File_Download);
+	//server.on("/upload",   File_Upload);
+	//server.on("/fupload",  HTTP_POST,[](){ server.send(200);}, handleFileUpload);
+	//server.on("/stream",   File_Stream);
+	server.on("/delete",   File_Delete);
+	server.on("/dir",      SD_dir);
+	server.on("/consultarPorFecha", ConsultarPorFecha);
   
   ///////////////////////////// End of Request commands
-  server.begin();
-  Serial.println("HTTP server started");
-/*
-	root = SD.open("/");
-
-  	printDirectory2(root, 0);
-
-  	Serial.println("done!");
-
-	listDir(SD, "/", 0);
-	*/
+  	server.begin();
+  	Serial.println("HTTP server started");
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void loop(void){
@@ -194,15 +179,8 @@ void loop(void){
 
 void HomePage(){
 
-	//server.send(200, "text/html", "Hola mundo"); 
-
   SendHTML_Header();
-
   
-  //webpage += F("<a href='/download'><button>Descargar</button></a>");
-  //webpage += F("<a href='/upload'><button>Cargar</button></a>");
-  //webpage += F("<a href='/stream'><button>Stream</button></a>");
-  //webpage += F("<a href='/delete'><button>Borrar</button></a>");
   fechaEnsayoConsultada = "";
   webpage += F("<a href='/dir'><button>Listado de archivos</button></a>");
   append_page_footer();
@@ -218,43 +196,39 @@ void File_Download(){ // This gets called twice, the first pass selects the inpu
 		SD_file_download(server.arg(0));
 		Serial.print("argumento = ");
 		Serial.println(server.arg(0));
-		//SD_file_download("20000114T051709.csv");
 	} 
   }
   else SelectInput("Enter filename to download","download","download");
-  //SD_file_download(filename);
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void SD_file_download(String filename){
 
 	Serial.print("filename = ");
 	Serial.println(filename);
-	
-
-	
-	
+		
   if (SD_present) { 
-    File download = SD.open("/"+filename);
+    
+	File download = SD.open("/"+filename);
 	Serial.println();
 	Serial.println(String(download.name()));
 	Serial.println();
 	Serial.print("filenamePath = ");
 	Serial.println(download.path());
 	Serial.println();
-	//File download = SD.open(filename);
-    if (download) {
+    
+	if (download) {
 		Serial.print("Existe el archivo = ");
 		Serial.println(String(download.name()));
 		Serial.println("Se descarga el archivo");
 		Serial.println();
 		
-      server.sendHeader("Content-Type", "text/text");
-      server.sendHeader("Content-Disposition", "attachment; filename="+filename);
-      server.sendHeader("Connection", "close");
-      server.streamFile(download, "application/octet-stream");
-      download.close();
-    } else ReportFileNotPresent("download"); 
-  } else ReportSDNotPresent();
+		server.sendHeader("Content-Type", "text/text");
+		server.sendHeader("Content-Disposition", "attachment; filename="+filename);
+		server.sendHeader("Connection", "close");
+		server.streamFile(download, "application/octet-stream");
+		download.close();
+    }else ReportFileNotPresent("download"); 
+  }else ReportSDNotPresent();
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void File_Upload(){
@@ -321,11 +295,9 @@ void SD_dir(){
 	  webpage += F("<form action='/consultarPorFecha'><label for='Fecha'>Fecha: </label><input type='date' id='fechaEnsayo' name='fechaEnsayo'><input type='submit'></form><br>");
       webpage += F("<table align='center'>");
       webpage += F("<tr><th>Nombre</th><th>Fecha</th><th style='width:20%'>Archivo/Directorio</th><th>Tama&ntildeo</th><th>Eliminar</th><th>Descargar</th></tr>");
-      //printDirectory("/",0);
-	  //printDirectoryOriginal("/",0);
-	  //printDirectory_v2(root, 0);
-	  //fechaEnsayoConsultada = "";
+
 	  printDirectory_v3(root, 0);
+
 	  webpage += F("</table>");
 	  fechaEnsayoConsultada = "";
       SendHTML_Content();
@@ -391,22 +363,14 @@ void printDirectory_v3(File dir, int numTabs){
 			Serial.print("entry.path() = ");
 			Serial.println(entry.path());
 
-			//pathDirectory = entry.name();//obtiene el nombre del directorio
-			
-			//String rutaDir = pathDirectory + "/" + entry.name();
-
 			Serial.println(String(entry.isDirectory()?"Dir ":"File ")+String(entry.name()));
-		//webpage += "<tr><td>"+String(file.name())+"</td><td></td><td>"+String(file.isDirectory()?"Dir":"File")+"</td><td></td><td align='center'><input type='checkbox' id='vehicle4' name='vehicle1' value='Bike'><label for='vehicle1'> Borrar</label></td></tr>";
-	//	  webpage += "<tr><td>"+pathDirectory+"</td><td></td><td>"+String(file.isDirectory()?"Dir":"File")+"</td><td></td><td align='center'><input type='checkbox' id='vehicle4' name='vehicle1' value='Bike'><label for='vehicle1'> Borrar</label></td></tr>";
 			webpage += "<tr><td>"+String(entry.path())+"</td><td></td><td>"+String(entry.isDirectory()?"Dir":"File")+"</td><td></td><td align='center'><input type='checkbox' id='vehicle4' name='vehicle1' value='Bike'><label for='vehicle1'> Borrar</label></td></tr>";
 		
-			//Serial.println("/");
 			printDirectory_v3(entry, numTabs + 1);
 		}
 		else//Si es un archivo
 		{
-		//Serial.print(String(file.name())+"\t");
-			
+		
 			filename = String(entry.name());//convierte a String
 			String rutaArchivo = String(entry.path());
 
@@ -446,7 +410,6 @@ void printDirectory_v3(File dir, int numTabs){
 				//Serial.println(day);
 
 				fechaNormalizada = year + "-" + month + "-" + day;
-				//Serial.println(fechaNormalizada);
 
 			}else{
 				fechaNormalizada = "";
@@ -460,12 +423,10 @@ void printDirectory_v3(File dir, int numTabs){
 				Serial.print("SI se ha realizado consultaPorFecha");
 				Serial.println(" <------------------------ ");
 				
-				//String rutaArchivo = pathDirectory + "/" + entry.name();
 				if(fechaNormalizada.compareTo(fechaEnsayoConsultada) == 0){//si coinciden las fechas
 
 					Serial.println("SI coinciden las fechas");
 				
-					//webpage += "<tr><td>"+filename+"</td><td>"+fechaNormalizada+"</td>";
 					webpage += "<tr><td>"+ rutaArchivo +"</td><td>"+fechaNormalizada+"</td>";
 					Serial.print(String(entry.isDirectory()?"Dir ":"File ")+String(entry.name())+"\t");
 					webpage += "<td>"+String(entry.isDirectory()?"Dir":"File")+"</td>";
@@ -476,17 +437,14 @@ void printDirectory_v3(File dir, int numTabs){
 					else if(bytes < (1024 * 1024))        fsize = String(bytes/1024.0,3)+" KB";
 					else if(bytes < (1024 * 1024 * 1024)) fsize = String(bytes/1024.0/1024.0,3)+" MB";
 					else                                  fsize = String(bytes/1024.0/1024.0/1024.0,3)+" GB";
-					//webpage += "<td>"+fsize+"</td><td align='center'><input type='checkbox' id='vehicle4' name='vehicle1' value='Bike'><label for='vehicle1'> Borrar</label></td>";
+
 					webpage += "<td>"+fsize+"</td><td><form action='/delete' method='post'><input type='text' hidden name='lname' value='"+String(rutaArchivo)+"'><input type='submit' name='delete' value='Borrar'></form></td>";
-					//webpage += "<td align='left'><a href='download'><button class='btn'><i class='fa fa-download'></i>Download</button></a></td></tr>";
-					//webpage += "<td align='left'><a href='/"+filename+"' download>Download</a></td></tr>";
-					//webpage += "<td><form action='/download' method='post'><input type='text' hidden name='lname' value='"+String(entry.name())+"'><input type='submit' name='download' value='Descargar'></form></td>";
 					Serial.print("Archivo a descargar = ");
 					Serial.print(rutaArchivo);
 					webpage += "<td><form action='/download' method='post'><input type='text' hidden name='lname' value='"+String(rutaArchivo)+"'><input type='submit' name='download' value='Descargar'></form></td>";
 					Serial.println(String(fsize));
 				}else{//si no coinciden las fechas
-					//webpage += "<p>La fecha consultada no muestra datos</p><br>";
+
 					Serial.println("NO coinciden las fechas");
 				}
 			
@@ -498,7 +456,6 @@ void printDirectory_v3(File dir, int numTabs){
 				Serial.print("NO se ha realizado consultaPorFecha");
 				Serial.println(" <------------------------ ");
 
-				//webpage += "<tr><td>"+filename+"</td><td>"+fechaNormalizada+"</td>";
 				webpage += "<tr><td>"+rutaArchivo+"</td><td>"+fechaNormalizada+"</td>";
 				Serial.print(String(entry.isDirectory()?"Dir ":"File ")+String(entry.name())+"\t");
 				webpage += "<td>"+String(entry.isDirectory()?"Dir":"File")+"</td>";
@@ -509,10 +466,7 @@ void printDirectory_v3(File dir, int numTabs){
 				else if(bytes < (1024 * 1024))        fsize = String(bytes/1024.0,3)+" KB";
 				else if(bytes < (1024 * 1024 * 1024)) fsize = String(bytes/1024.0/1024.0,3)+" MB";
 				else                                  fsize = String(bytes/1024.0/1024.0/1024.0,3)+" GB";
-				//webpage += "<td>"+fsize+"</td><td align='center'><input type='checkbox' id='vehicle4' name='vehicle1' value='Bike'><label for='vehicle1'> Borrar</label></td>";
 				webpage += "<td>"+fsize+"</td><td><form action='/delete' method='post'><input type='text' hidden name='lname' value='"+String(rutaArchivo)+"'><input type='submit' name='delete' value='Borrar'></form></td>";
-				//webpage += "<td align='left'><a href='download'><button class='btn'><i class='fa fa-download'></i>Download</button></a></td></tr>";
-				//webpage += "<td align='left'><a href='/"+filename+"' download>Download</a></td></tr>";
 				Serial.print("Archivo a descargar = ");
 				Serial.println(rutaArchivo);
 				webpage += "<td><form action='/download' method='post'><input type='text' hidden name='lname' value='"+String(rutaArchivo)+"'><input type='submit' name='download' value='Descargar'></form></td>";
@@ -703,7 +657,6 @@ void ConsultarPorFecha(void){
     	if (server.hasArg("fechaEnsayo")){
 
 
-			//SD_file_download(server.arg(0));
 			fechaEnsayoConsultada = server.arg(0);
 			webpage += F("<p>No se encontraron archivos</p>");
 			webpage += "<p>fechaEnsayo = " + fechaEnsayoConsultada + "</p>";
@@ -712,10 +665,6 @@ void ConsultarPorFecha(void){
 			Serial.print(fechaEnsayoConsultada);
 			Serial.println(" <----------------------");
 
-			//webpage += F("<p>fechaEnsayo = </p>");
-			//server.sendHeader("Location", String("/"), true);
-			//server.send ( 302, "text/plain", "");
-			//SD_dir();
 		} 
   	}
 
