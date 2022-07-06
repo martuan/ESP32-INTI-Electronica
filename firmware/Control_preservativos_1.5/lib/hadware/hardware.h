@@ -17,7 +17,7 @@
                                                               //que el valor se mantenga en este rango durante el ensayo. 
 #define addressEEPROM_1kPa  80  //Guarda el valor del AD para 1kPa en el sensor 2 (Fuelle)
 #define addressEEPROM_2kPa  84  //Guarda el valor del AD para 2kPa en el sensor 2 (Fuelle)
-#define direccionLCD    0x27    //Igual a PCF8574_ADDR_A21_A11_A01
+//#define direccionLCD    0x27    //Igual a PCF8574_ADDR_A21_A11_A01
 #define NUMERO_MAQUINA 1
 
 #endif

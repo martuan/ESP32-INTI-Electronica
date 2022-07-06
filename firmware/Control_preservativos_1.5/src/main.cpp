@@ -48,10 +48,10 @@ leerEEPROM leerEEPROM1(addressEEPROM_1kPa, addressEEPROM_2kPa);
 manejadorSD tarjetaSD1(CS);
 DHT dht(DHTPIN, DHTTYPE);
 LiquidCrystal_I2C lcd1(PCF8574_ADDR_A21_A11_A01, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);  //PCF8574_ADDR_A21_A11_A01 -> dicección I2C del display físico  0X27
-LiquidCrystal_I2C lcd2(PCF8574_ADDR_A21_A11_A00, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);  //PCF8574_ADDR_A21_A11_A00 -> dicección I2C del display físico 0X26
+//LiquidCrystal_I2C lcd2(PCF8574_ADDR_A21_A11_A00, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);  //PCF8574_ADDR_A21_A11_A00 -> dicección I2C del display físico 0X26
 
 imrpimirLCDI2C imprimirLcd1(lcd1);
-imrpimirLCDI2C imprimirLcd2(lcd2);
+//imrpimirLCDI2C imprimirLcd2(lcd2);
 
 //Rutina que crea en archivo de registro de nuevo ensayo, lo nombra según formato ISO8601 y Escribe dentro de el el encabezado del ensayo
 void calibracionSensoresPresion(void);
@@ -73,10 +73,10 @@ void setup() {
     ; // wait for serial port to connect. Needed for native USB port only
   }
   imprimirLcd1.inicializarLCD(20, 4);
-  imprimirLcd2.inicializarLCD(16, 2);
+  //imprimirLcd2.inicializarLCD(16, 2);
  
   imprimirLcd1.imprimirLCDfijo("  INTI CAUCHOS",0, 0);
-  imprimirLcd2.imprimirLCDfijo("HOLA MUNDO",0, 0);
+  //imprimirLcd2.imprimirLCDfijo("HOLA MUNDO",0, 0);
 
   memoriaSDinicializada = tarjetaSD1.inicializarSD();
     if(!memoriaSDinicializada){
