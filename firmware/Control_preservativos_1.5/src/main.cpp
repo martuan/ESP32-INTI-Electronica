@@ -2,6 +2,7 @@
 
 /*
  * HADWARE: 
+ * Se definen las constantes en el archivo hardware.h
  * Pin de Chip Select para escribir el SD : Pin 5
  * Pulsador inicio ensayo: Pin 4
  * Pulsador calibracion: Pin 13
