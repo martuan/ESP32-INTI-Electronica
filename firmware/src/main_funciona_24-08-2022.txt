@@ -157,8 +157,6 @@ String rutinaInicioEnsayo(void);
 void rutinaEnsayo(String nombreArchivo);
 
 char estadoPin = 0;
-bool flagCheckArgs = 0;
-String ultimoDirExplorado = {};
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void setup(void){
@@ -481,25 +479,7 @@ void SD_dir(){
   if (SD_present) { 
     //File root = SD.open("/");
 	
-/*
-
-	if (server.args() > 0 && server.arg(0).compareTo(ultimoDirExplorado) != 0) { // Si se recibieron argumentos y el directorio (argumento) es distinto al anterior
-		if (server.hasArg("directorio")){
-			String directorio = server.arg(0);
-			Serial.print("directorio = ");
-			Serial.println(directorio);
-	//		flagCheckArgs = 1;
-			ultimoDirExplorado = directorio;//guarda en variable auxiliar para futura comparación
-			
-	
-			//printDirectory_v3(entry, numTabs + 1);
-			printDirectory_v3(entry, numTabs + 1);
-		}
-	}
-	*/
-//entry.open()
 	root.open("/");
-	//root.open(pathDirectory.c_str());
 	//File root = SPIFFS.open("/");
     if (root) {
       root.rewindDirectory();
@@ -510,7 +490,6 @@ void SD_dir(){
 	  webpage += F("<table class='table table-striped'>");
       //webpage += F("<tr><th>Nombre</th><th>Fecha</th><th style='width:20%'>Archivo/Directorio</th><th>Tama&ntildeo</th><th>Eliminar</th><th>Descargar</th></tr>");
 	  webpage += F("<tr><th scope='col'>Nombre</th><th scope='col'>Fecha</th><th scope='col'>Archivo/Directorio</th><th scope='col'>Tama&ntildeo</th><th scope='col'>Eliminar</th><th scope='col'>Descargar</th></tr>");
-	  webpage += "<tr><td><form action='/dir' method='post'><input type='hidden' name='directorioAtras' id='directorioAtras' value='../'><input type='Submit' value='../'></form></td><td></td><td></td><td></td><td align='center'></td><td></td></tr>";
 
 	  printDirectory_v3(root, 0);
 	  //printDirectory_v4(root, 0);
@@ -530,7 +509,7 @@ void SD_dir(){
     SendHTML_Stop();   // Stop is needed because no content length was sent
   } else ReportSDNotPresent();
   
-  //pathDirectory = "";//setea el directorio para una nueva búsqueda
+  pathDirectory = "";//setea el directorio para una nueva búsqueda
 
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -553,7 +532,8 @@ void printDirectory_v3(SdFile dir, int numTabs){
 	String nombreDeArchivo = {};
 	String rutaDeArchivo = {};
 	bool hayMasArchivos = 0;
-	String dirNuevo = {};
+	
+	
 
 	while(true){
 
@@ -562,108 +542,48 @@ void printDirectory_v3(SdFile dir, int numTabs){
 
 		
 		hayMasArchivos = entry.openNext(&dir, O_RDONLY);
-		
 		Serial.println(hayMasArchivos);
 
 		if(hayMasArchivos == 0){//si no hay más archivos en el directorio actual, retrocede un nivel en pathDirectory
 
-			//pathDirectory = pathDirectory.substring(0, pathDirectory.lastIndexOf('/'));
-			//Serial.print("pathDirectory = ");
-			//Serial.println(pathDirectory);
+			pathDirectory = pathDirectory.substring(0, pathDirectory.lastIndexOf('/'));
+			Serial.print("pathDirectory = ");
+			Serial.println(pathDirectory);
 			break;
 		}
-
+/*
+		if (! entry) {
+			// no hay mas archivos
+			break;
+		}
+*/			
 		if (webpage.length() > 1000) {
 			SendHTML_Content();
 		}
 
 		entry.getName(entryName, 100);//obtiene el nombre de la entrada, ya sea un directorio o un archivo
+		//Serial.print("fechaArchivo");
+		//Serial.print(entry.getCreateDateTime());
 		
 		if(entry.isDirectory()){//Si es un directorio y no hay consulta por fechas
+		//if(entry.isDirectory() && fechaEnsayoConsultada.length() == 0){//Si es un directorio y no hay consulta por fechas
 			
 			rutaDeArchivo = String(entryName);
 			//entry.getName(rutaArchivo, 100);
-			//pathDirectory = pathDirectory + "/" + rutaDeArchivo;
-			//pathDirectory = rutaDeArchivo;
+			pathDirectory = pathDirectory + "/" + rutaDeArchivo;
+
 			//Serial.print("Nombre de directorio = ");
 			//Serial.println(rutaDeArchivo);
-			//Serial.print("Ruta actual = ");
-			//Serial.println(pathDirectory);
-
+			Serial.print("Ruta actual = ");
+			Serial.println(pathDirectory);
+			
+			//Serial.println(String(entry.isDirectory()?"Dir ":"File ")+String(entry.name()));
+			//webpage += "<tr><td>"+String(entry.path())+"</td><td></td><td>"+String(entry.isDirectory()?"Dir":"File")+"</td><td></td><td align='center'><input type='checkbox' id='vehicle4' name='vehicle1' value='Bike'><label for='vehicle1'> Borrar</label></td><td></td></tr>";
 			if(fechaEnsayoConsultada.length() == 0){//si no hay consulta por fechas
-			
-				
-				webpage += "<tr><td><form action='/dir' method='post'><input type='hidden' name='directorio' id='directorio' value="+ String(rutaDeArchivo) +"><input type='hidden' name='cuenta' id='cuenta' value="+ String(cuenta) +"><input type='Submit' value="+String(rutaDeArchivo)+"></form></td><td></td><td>"+String(entry.isDirectory()?"Dir":"File")+"</td><td></td><td align='center'></td><td></td></tr>";
-
+				webpage += "<tr><td>"+String(rutaDeArchivo)+"</td><td></td><td>"+String(entry.isDirectory()?"Dir":"File")+"</td><td></td><td align='center'><input type='checkbox' id='vehicle4' name='vehicle1' value='Bike'><label for='vehicle1'> Borrar</label></td><td></td></tr>";
 			}
-					
-			if (server.args() > 0 && server.arg(0).compareTo(ultimoDirExplorado) != 0) { // Si se recibieron argumentos y el directorio (argumento) es distinto al anterior
-			//if (server.args() > 0){ // Si se recibieron argumentos
-
-				String directorio = server.arg(0);
-
-    			if (server.hasArg("directorio")){//si se pide avanzar adelante (un directorio nuevo)
-					
-					Serial.print("directorio = ");
-					Serial.println(directorio);
-					Serial.print("Ruta actual (del POST) = ");
-					Serial.println(pathDirectory);
-					
-					ultimoDirExplorado = directorio;//guarda en variable auxiliar para futura comparación
-					//dirNuevo = pathDirectory + "/" + directorio;
-					//pathDirectory = directorio;//lo último que llegó por POST será la ruta actual
-					//pathDirectory = pathDirectory + "/" + directorio;
-					pathDirectory = pathDirectory + directorio + "/" ;
-					Serial.print("pathDirectory = ");
-					Serial.println(pathDirectory);
-					cuenta++;
-					
-					//server.argName(0);
-					
-				}else if(server.hasArg("directorioAtras")){//si se pide avanzar atrás (el directorio padre)
-
-					pathDirectory = pathDirectory.substring(0, pathDirectory.lastIndexOf('/'));
-					Serial.print("pathDirectory (atras) = ");
-					Serial.println(pathDirectory);
-					Serial.print("pathDirectory = ");
-					Serial.println(pathDirectory);
-					//directorio = server.arg(0);
-					ultimoDirExplorado = directorio;//guarda en variable auxiliar para futura comparación
-					cuenta++;
-					//entry.open(dirNuevo.c_str());
-
-
-				}
-
-					
-
-					
-
-					//if(directorio.compareTo("../") == 0 && server.arg(0).compareTo(ultimoDirExplorado) != 0){//si es igual a ../ vuelve atrás
-
-						
-						//dirNuevo = pathDirectory;//la nueva ubicación es el pathDirectory recortado
-
-				
-
-					entry.open(pathDirectory.c_str());
 			
-					//printDirectory_v3(entry, numTabs + 1);
-					printDirectory_v3(entry, numTabs + 1);
-
-					
-
-					
-			
-					//Serial.print("dirNuevo = ");
-					//Serial.println(dirNuevo);
-					
-					
-					
-
-				
-			}
-		
+			printDirectory_v3(entry, numTabs + 1);
 		}
 		else//Si es un archivo
 		{

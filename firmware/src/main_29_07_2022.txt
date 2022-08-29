@@ -64,7 +64,7 @@
 	#include <WiFiMulti.h>         // Built-in
 	#include <ESP32WebServer.h>    // https://github.com/Pedroalbuquerque/ESP32WebServer download and place in your Libraries folder
 	#include <ESPmDNS.h>
-	//#include "FS.h"
+	#include "FS.h"
 	#include <AsyncTCP.h>
 	#include "SPIFFS.h"
 #endif
@@ -72,20 +72,18 @@
 #include "Network.h"
 #include "Sys_Variables.h"
 #include "CSS.h"
-//#include <SD.h> 
-//#include <ArduinoFiles.h>
-#include <SdFat.h>
-//#include <SPI.h>
+#include <SD.h> 
+#include <SPI.h>
 
 #include <Wire.h>
 #include <RTClib.h>
 RTC_DS3231 rtc;
 #include <SPI.h>
-//#include <SD.h>
+#include <SD.h>
 #include <LiquidCrystal_I2C.h>
 #include <Adafruit_Sensor.h>
 #include "DHT.h"
-//#include "FS.h"
+#include "FS.h"
 #include <EEPROM.h>
 
 #include <manejadorSD.h>
@@ -108,9 +106,7 @@ void File_Download();
 void SD_file_download(String filename);
 void handleFileUpload();
 void SD_dir();
-//void printDirectory_v3(File dir, int numTabs);
-void printDirectory_v3(SdFile dir, int numTabs);
-void printDirectory_v4(SdFile dir, int numTabs);
+void printDirectory_v3(File dir, int numTabs);
 void File_Stream();
 void File_Delete();
 void SD_file_delete(String filename);
@@ -127,8 +123,6 @@ void ReportSDNotPresent();
 void SD_file_stream(String filename);
 void initSPIFFS(void);
 void ConsultarPorFecha();
-void agregaFilaEnTabla(String nombreDeArchivo, String fechaNormalizada, String rutaDeArchivo);
-String obtenerFechaDeArchivo(void);
 
 // ********** Funciones del controlador ***************
 
@@ -139,11 +133,6 @@ leerEEPROM leerEEPROM1(addressEEPROM_1kPa, addressEEPROM_2kPa);
 manejadorSD tarjetaSD1(CS);
 DHT dht(DHTPIN, DHTTYPE);
 LiquidCrystal_I2C lcd(PCF8574_ADDR_A21_A11_A01, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);
-
-SdFat sd;
-SdFile root;
-SdFile file;
-SdFile entry;
 
 //Rutina que crea en archivo de registro de nuevo ensayo, lo nombra según formato ISO8601 y Escribe dentro de el el encabezado del ensayo
 void calibracionSensoresPresion(void);
@@ -156,19 +145,14 @@ void leerSerie(void);
 String rutinaInicioEnsayo(void);
 void rutinaEnsayo(String nombreArchivo);
 
-char estadoPin = 0;
-bool flagCheckArgs = 0;
-String ultimoDirExplorado = {};
-
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void setup(void){
   
   	Serial.begin(115200);
 
-	//initSPIFFS();
-	pinMode(16, OUTPUT);
+	initSPIFFS();
 	
-	//File root;
+	File root;
   	int cuenta = 0;
 
       // Nos conectamos a nuestra red Wifi
@@ -223,36 +207,12 @@ void setup(void){
 	} 
 	#ifdef ESP32
 	// Note: SD_Card readers on the ESP32 will NOT work unless there is a pull-up on MISO, either do this or wire one on (1K to 4K7)
-		//Serial.println(MISO);
+		Serial.println(MISO);
 		pinMode(19,INPUT_PULLUP);
 	#endif
-
-	
-	//SPI.setFrequency(500000);
-	
-	//SPIClass SPI = SPIClass(VSPI);
-	/*
-	Serial.print("clock Divider: ");
-	Serial.println(SPI.getClockDivider());
-	SPI.setDataMode(3);
-	SPI.setFrequency(80000000);
-	SPI.setClockDivider(SPI_CLOCK_DIV128);
-	Serial.print("clock Divider: ");
-	Serial.println(SPI.getClockDivider());
-	*/
-	SPI.begin(SCK, MISO, MOSI, SD_CS_pin);
-	
-	
-
 	Serial.print(F("Initializing SD card...")); 
-
 	
-
-	SD.begin(SD_CS_pin);//prueba
-	//if (!SD.begin(SD_CS_pin)) { // see if the card is present and can be initialised. Wemos SD-Card CS uses D8 
-	//if (!SD.begin(SD_CS_pin, SPI, 20000000 )) { // see if the card is present and can be initialised. Wemos SD-Card CS uses D8 
-	//if (!SD.begin(SD_CS_pin, SPI, 80000000, "/sd", (uint8_t)5, false )) { // see if the card is present and can be initialised. Wemos SD-Card CS uses D8 
-	if (!sd.begin(SD_CS_pin, SD_SCK_MHZ(20))) { // see if the card is present and can be initialised. Wemos SD-Card CS uses D8 
+	if (!SD.begin(SD_CS_pin)) { // see if the card is present and can be initialised. Wemos SD-Card CS uses D8 
 		Serial.println(F("Card failed or not present, no SD Card data logging possible..."));
 		SD_present = false; 
 	} 
@@ -261,11 +221,6 @@ void setup(void){
 		Serial.println(F("Card initialised... file access enabled..."));
 		SD_present = true; 
 	}
-/*
-	if (!root.open("/Lote grande")) {
-    	sd.errorHalt("open root failed");
-  	}
-	  */
 	// Note: Using the ESP32 and SD_Card readers requires a 1K to 4K7 pull-up to 3v3 on the MISO line, otherwise they do-not function.
 	//----------------------------------------------------------------------   
 	///////////////////////////// Server Commands 
@@ -396,29 +351,30 @@ void File_Download(){ // This gets called twice, the first pass selects the inpu
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void SD_file_download(String filename){
 
+	Serial.print("filename = ");
+	Serial.println(filename);
+		
   if (SD_present) { 
-
-	File download2 = SD.open("/"+filename);
-	
-	SdFile download;
-
-	download.open(filename.c_str());
-
+    
+	File download = SD.open("/"+filename);
+	Serial.println();
+	Serial.println(String(download.name()));
+	Serial.println();
+	Serial.print("filenamePath = ");
+	Serial.println(download.path());
+	Serial.println();
+    
 	if (download) {
 		Serial.print("Existe el archivo = ");
-		Serial.print(filename);
-		Serial.print(" ");
-
-		//Serial.println(String(download.name()));
+		Serial.println(String(download.name()));
 		Serial.println("Se descarga el archivo");
 		Serial.println();
 		
 		server.sendHeader("Content-Type", "text/text");
 		server.sendHeader("Content-Disposition", "attachment; filename="+filename);
 		server.sendHeader("Connection", "close");
-		server.streamFile(download2, "application/octet-stream");
+		server.streamFile(download, "application/octet-stream");
 		download.close();
-		download2.close();
     }else ReportFileNotPresent("download"); 
   }else ReportSDNotPresent();
 }
@@ -479,28 +435,7 @@ void handleFileUpload(){ // upload a new file to the Filing system
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void SD_dir(){
   if (SD_present) { 
-    //File root = SD.open("/");
-	
-/*
-
-	if (server.args() > 0 && server.arg(0).compareTo(ultimoDirExplorado) != 0) { // Si se recibieron argumentos y el directorio (argumento) es distinto al anterior
-		if (server.hasArg("directorio")){
-			String directorio = server.arg(0);
-			Serial.print("directorio = ");
-			Serial.println(directorio);
-	//		flagCheckArgs = 1;
-			ultimoDirExplorado = directorio;//guarda en variable auxiliar para futura comparación
-			
-	
-			//printDirectory_v3(entry, numTabs + 1);
-			printDirectory_v3(entry, numTabs + 1);
-		}
-	}
-	*/
-//entry.open()
-	root.open("/");
-	//root.open(pathDirectory.c_str());
-	//File root = SPIFFS.open("/");
+    File root = SD.open("/");
     if (root) {
       root.rewindDirectory();
       SendHTML_Header();
@@ -510,10 +445,8 @@ void SD_dir(){
 	  webpage += F("<table class='table table-striped'>");
       //webpage += F("<tr><th>Nombre</th><th>Fecha</th><th style='width:20%'>Archivo/Directorio</th><th>Tama&ntildeo</th><th>Eliminar</th><th>Descargar</th></tr>");
 	  webpage += F("<tr><th scope='col'>Nombre</th><th scope='col'>Fecha</th><th scope='col'>Archivo/Directorio</th><th scope='col'>Tama&ntildeo</th><th scope='col'>Eliminar</th><th scope='col'>Descargar</th></tr>");
-	  webpage += "<tr><td><form action='/dir' method='post'><input type='hidden' name='directorioAtras' id='directorioAtras' value='../'><input type='Submit' value='../'></form></td><td></td><td></td><td></td><td align='center'></td><td></td></tr>";
 
 	  printDirectory_v3(root, 0);
-	  //printDirectory_v4(root, 0);
 
 	  webpage += F("</table>");
 	  fechaEnsayoConsultada = "";
@@ -530,159 +463,104 @@ void SD_dir(){
     SendHTML_Stop();   // Stop is needed because no content length was sent
   } else ReportSDNotPresent();
   
-  //pathDirectory = "";//setea el directorio para una nueva búsqueda
+  pathDirectory = "";//setea el directorio para una nueva búsqueda
 
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-void printDirectory_v4(SdFile dir, int numTabs){
-
-	entry.openNext(&dir, O_RDONLY);
-	entry.ls();
-	entry.close();
-
-
-
-}
-//void printDirectory_v3(File dir, int numTabs){
-void printDirectory_v3(SdFile dir, int numTabs){
-
-
-	
-	char entryName[100] = {};
-	String nombreDeArchivo = {};
-	String rutaDeArchivo = {};
-	bool hayMasArchivos = 0;
-	String dirNuevo = {};
+void printDirectory_v3(File dir, int numTabs){
 
 	while(true){
 
-		
+		int indexBeginDate = 0;
+		int indexEndDate = 0;
+
+		int indexBeginYear = 0;
+		int indexEndYear = 0;
+
+		int indexBeginMonth = 0;
+		int indexEndMonth = 0;
+
+		int indexBeginDay = 0;
+		int indexEndDay = 0;
+
+		String date = {};
+		String year = {};
+		String month = {};
+		String day = {};
 		String fechaNormalizada = {};
 
 		
-		hayMasArchivos = entry.openNext(&dir, O_RDONLY);
-		
-		Serial.println(hayMasArchivos);
+		File entry =  dir.openNextFile();
 
-		if(hayMasArchivos == 0){//si no hay más archivos en el directorio actual, retrocede un nivel en pathDirectory
-
-			//pathDirectory = pathDirectory.substring(0, pathDirectory.lastIndexOf('/'));
-			//Serial.print("pathDirectory = ");
-			//Serial.println(pathDirectory);
+		if (! entry) {
+			// no hay mas archivos
 			break;
 		}
-
+		for (uint8_t i = 0; i < numTabs; i++) {
+		Serial.print('\t');
+		}
+		
+		Serial.println(entry.name());
+	
+		
 		if (webpage.length() > 1000) {
 			SendHTML_Content();
 		}
-
-		entry.getName(entryName, 100);//obtiene el nombre de la entrada, ya sea un directorio o un archivo
 		
-		if(entry.isDirectory()){//Si es un directorio y no hay consulta por fechas
+		if(entry.isDirectory() && fechaEnsayoConsultada.length() == 0){//Si es un directorio y no hay consulta por fechas
 			
-			rutaDeArchivo = String(entryName);
-			//entry.getName(rutaArchivo, 100);
-			//pathDirectory = pathDirectory + "/" + rutaDeArchivo;
-			//pathDirectory = rutaDeArchivo;
-			//Serial.print("Nombre de directorio = ");
-			//Serial.println(rutaDeArchivo);
-			//Serial.print("Ruta actual = ");
-			//Serial.println(pathDirectory);
+			Serial.print("entry.path() = ");
+			Serial.println(entry.path());
 
-			if(fechaEnsayoConsultada.length() == 0){//si no hay consulta por fechas
-			
-				
-				webpage += "<tr><td><form action='/dir' method='post'><input type='hidden' name='directorio' id='directorio' value="+ String(rutaDeArchivo) +"><input type='hidden' name='cuenta' id='cuenta' value="+ String(cuenta) +"><input type='Submit' value="+String(rutaDeArchivo)+"></form></td><td></td><td>"+String(entry.isDirectory()?"Dir":"File")+"</td><td></td><td align='center'></td><td></td></tr>";
-
-			}
-					
-			if (server.args() > 0 && server.arg(0).compareTo(ultimoDirExplorado) != 0) { // Si se recibieron argumentos y el directorio (argumento) es distinto al anterior
-			//if (server.args() > 0){ // Si se recibieron argumentos
-
-				String directorio = server.arg(0);
-
-    			if (server.hasArg("directorio")){//si se pide avanzar adelante (un directorio nuevo)
-					
-					Serial.print("directorio = ");
-					Serial.println(directorio);
-					Serial.print("Ruta actual (del POST) = ");
-					Serial.println(pathDirectory);
-					
-					ultimoDirExplorado = directorio;//guarda en variable auxiliar para futura comparación
-					//dirNuevo = pathDirectory + "/" + directorio;
-					//pathDirectory = directorio;//lo último que llegó por POST será la ruta actual
-					//pathDirectory = pathDirectory + "/" + directorio;
-					pathDirectory = pathDirectory + directorio + "/" ;
-					Serial.print("pathDirectory = ");
-					Serial.println(pathDirectory);
-					cuenta++;
-					
-					//server.argName(0);
-					
-				}else if(server.hasArg("directorioAtras")){//si se pide avanzar atrás (el directorio padre)
-
-					pathDirectory = pathDirectory.substring(0, pathDirectory.lastIndexOf('/'));
-					Serial.print("pathDirectory (atras) = ");
-					Serial.println(pathDirectory);
-					Serial.print("pathDirectory = ");
-					Serial.println(pathDirectory);
-					//directorio = server.arg(0);
-					ultimoDirExplorado = directorio;//guarda en variable auxiliar para futura comparación
-					cuenta++;
-					//entry.open(dirNuevo.c_str());
-
-
-				}
-
-					
-
-					
-
-					//if(directorio.compareTo("../") == 0 && server.arg(0).compareTo(ultimoDirExplorado) != 0){//si es igual a ../ vuelve atrás
-
-						
-						//dirNuevo = pathDirectory;//la nueva ubicación es el pathDirectory recortado
-
-				
-
-					entry.open(pathDirectory.c_str());
-			
-					//printDirectory_v3(entry, numTabs + 1);
-					printDirectory_v3(entry, numTabs + 1);
-
-					
-
-					
-			
-					//Serial.print("dirNuevo = ");
-					//Serial.println(dirNuevo);
-					
-					
-					
-
-				
-			}
+			Serial.println(String(entry.isDirectory()?"Dir ":"File ")+String(entry.name()));
+			webpage += "<tr><td>"+String(entry.path())+"</td><td></td><td>"+String(entry.isDirectory()?"Dir":"File")+"</td><td></td><td align='center'><input type='checkbox' id='vehicle4' name='vehicle1' value='Bike'><label for='vehicle1'> Borrar</label></td><td></td></tr>";
 		
+			printDirectory_v3(entry, numTabs + 1);
 		}
 		else//Si es un archivo
 		{
-			
-			nombreDeArchivo = String(entryName);
-			//rutaDeArchivo = rutaDeArchivo + "/" + nombreDeArchivo;
-			rutaDeArchivo = pathDirectory + "/" + nombreDeArchivo;
-			filename = nombreDeArchivo;
-			Serial.println(filename);
-			if(filename.endsWith(".csv")){
-				Serial.println("termina con .csv");
-			}
+		
+			filename = String(entry.name());//convierte a String
+			String rutaArchivo = String(entry.path());
+
 
 			//if(filename.length() == 19 && filename.charAt(8) == 'T'){//si el archivo es una fecha de ensayo
 			if(filename.charAt(8) == 'T'){//si el archivo es una fecha de ensayo
-				Serial.print("CharAt(8) = T		");
-				fechaNormalizada = obtenerFechaDeArchivo();
-				Serial.print("fechaNormalizada =");
-				Serial.println(fechaNormalizada);
+
+				//********FECHA******
+				indexBeginDate = 0;
+				indexEndDate =	filename.indexOf('T');
+
+				date = filename.substring(indexBeginDate,indexEndDate);//obtiene la fecha del ensayo
+				//Serial.println("Fecha: ");
+				//Serial.println(date);
+
+				//********AÑO******
+				indexBeginYear = 0;
+				indexEndYear =	3;
+
+				year = filename.substring(indexBeginYear,indexEndYear + 1);//obtiene el año del ensayo
+				//Serial.println("Año: ");
+				//Serial.println(year);
+
+				//********MES******
+				indexBeginMonth = 4;
+				indexEndMonth =	5;
+
+				month = filename.substring(indexBeginMonth,indexEndMonth + 1);//obtiene el mes del ensayo
+				//Serial.println("Mes: ");
+				//Serial.println(month);
+
+				//********DIA******
+				indexBeginDay = 6;
+				indexEndDay =	7;
+
+				day = filename.substring(indexBeginDay,indexEndDay + 1);//obtiene el día del ensayo
+				//Serial.println("Día: ");
+				//Serial.println(day);
+
+				fechaNormalizada = year + "-" + month + "-" + day;
 
 			}else{
 				fechaNormalizada = "";
@@ -695,19 +573,27 @@ void printDirectory_v3(SdFile dir, int numTabs){
 				Serial.print("-------------------------> ");
 				Serial.print("SI se ha realizado consultaPorFecha");
 				Serial.println(" <------------------------ ");
-
-				Serial.print("Fechas: ");
-				Serial.print(fechaNormalizada);
-				Serial.print(" - ");
-				Serial.println(fechaEnsayoConsultada);
 				
 				if(fechaNormalizada.compareTo(fechaEnsayoConsultada) == 0){//si coinciden las fechas
 
 					Serial.println("SI coinciden las fechas");
 				
-					agregaFilaEnTabla(rutaDeArchivo, fechaNormalizada, rutaDeArchivo);
+					webpage += "<tr><td>"+ rutaArchivo +"</td><td>"+fechaNormalizada+"</td>";
+					Serial.print(String(entry.isDirectory()?"Dir ":"File ")+String(entry.name())+"\t");
+					webpage += "<td>"+String(entry.isDirectory()?"Dir":"File")+"</td>";
+					int bytes = entry.size();
+					String fsize = "";
 					
-					
+					if (bytes < 1024)                     fsize = String(bytes)+" B";
+					else if(bytes < (1024 * 1024))        fsize = String(bytes/1024.0,3)+" KB";
+					else if(bytes < (1024 * 1024 * 1024)) fsize = String(bytes/1024.0/1024.0,3)+" MB";
+					else                                  fsize = String(bytes/1024.0/1024.0/1024.0,3)+" GB";
+
+					webpage += "<td>"+fsize+"</td><td><form action='/delete' method='post'><input type='text' hidden name='lname' value='"+String(rutaArchivo)+"'><input type='submit' name='delete' value='Borrar'></form></td>";
+					Serial.print("Archivo a descargar = ");
+					Serial.print(rutaArchivo);
+					webpage += "<td><form action='/download' method='post'><input type='text' hidden name='lname' value='"+String(rutaArchivo)+"'><input type='submit' name='download' value='Descargar'></form></td>";
+					Serial.println(String(fsize));
 				}else{//si no coinciden las fechas
 
 					Serial.println("NO coinciden las fechas");
@@ -716,21 +602,38 @@ void printDirectory_v3(SdFile dir, int numTabs){
 			
 			}else{//si no se ha realizado consultaPorFecha, se muestra todo sin filtro
 				
-			/*				
+				
 				Serial.print("-------------------------> ");
 				Serial.print("NO se ha realizado consultaPorFecha");
 				Serial.println(" <------------------------ ");
 
 
 				Serial.print(String(entry.isDirectory()?"Dir ":"File ")+String(entry.name())+"\t");
-			*/
+	
+				webpage += "<tr><td>"+rutaArchivo+"</td><td>"+fechaNormalizada+"</td>";
+	
+				webpage += "<td>"+String(entry.isDirectory()?"Dir":"File")+"</td>";
+				int bytes = entry.size();
+				String fsize = "";
 				
-				agregaFilaEnTabla(rutaDeArchivo, fechaNormalizada, rutaDeArchivo);
+				if (bytes < 1024)                     fsize = String(bytes)+" B";
+				else if(bytes < (1024 * 1024))        fsize = String(bytes/1024.0,3)+" KB";
+				else if(bytes < (1024 * 1024 * 1024)) fsize = String(bytes/1024.0/1024.0,3)+" MB";
+				else                                  fsize = String(bytes/1024.0/1024.0/1024.0,3)+" GB";
+				webpage += "<td>"+fsize+"</td><td><form action='/delete' method='post'><input type='text' hidden name='lname' value='"+String(rutaArchivo)+"'><input type='submit' name='delete' value='Borrar'></form></td>";
+				Serial.print("Archivo a descargar = ");
+				Serial.println(rutaArchivo);
+				webpage += "<td><form action='/download' method='post'><input type='text' hidden name='lname' value='"+String(rutaArchivo)+"'><input type='submit' name='download' value='Descargar'></form></td>";
+				Serial.println(String(fsize));
+
+			}
 		
-				
-			}		
+			
+		
 		}
+		
 		entry.close();
+
 	}
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -899,7 +802,6 @@ void initSPIFFS() {
 void ConsultarPorFecha(void){
 
 	fechaEnsayoConsultada = "";//borra la anterior consulta
-	pathDirectory = "";//resetea la ruta
 
 	SendHTML_Header();
 	
@@ -1491,88 +1393,4 @@ void leerSerie(){
       nombreArchivo += Serial.readString();
       tarjetaSD1.leerFile(SD, nombreArchivo.c_str());
   }  
-}
-
-void agregaFilaEnTabla(String nombreDeArchivo, String fechaNormalizada, String rutaDeArchivo){
-
-	webpage += "<tr><td>"+ String(nombreDeArchivo) +"</td><td>"+fechaNormalizada+"</td>";
-	//Serial.print(String(entry.isDirectory()?"Dir ":"File ")+String(nombreDeArchivo)+"\t");
-	//Serial.print(String(entry.isDirectory()?"Dir ":"File ")+String(rutaDeArchivo)+"\t");
-	webpage += "<td>"+String(entry.isDirectory()?"Dir":"File")+"</td>";
-	int bytes = entry.size();
-	String fsize = "";
-	
-	if (bytes < 1024)                     fsize = String(bytes)+" B";
-	else if(bytes < (1024 * 1024))        fsize = String(bytes/1024.0,3)+" KB";
-	else if(bytes < (1024 * 1024 * 1024)) fsize = String(bytes/1024.0/1024.0,3)+" MB";
-	else                                  fsize = String(bytes/1024.0/1024.0/1024.0,3)+" GB";
-
-	webpage += "<td>"+fsize+"</td><td><form action='/delete' method='post'><input type='text' hidden name='lname' value='"+String(rutaDeArchivo)+"'><input type='submit' name='delete' value='Borrar'></form></td>";
-	Serial.print("		Archivo a descargar = ");
-	Serial.print(rutaDeArchivo);
-	webpage += "<td><form action='/download' method='post'><input type='text' hidden name='lname' value='"+String(rutaDeArchivo)+"'><input type='submit' name='download' value='Descargar'></form></td>";
-	Serial.print("\t");
-	Serial.println(String(fsize));
-
-}
-
-
-String obtenerFechaDeArchivo(void){
-
-
-	int indexBeginDate = 0;
-	int indexEndDate = 0;
-
-	int indexBeginYear = 0;
-	int indexEndYear = 0;
-
-	int indexBeginMonth = 0;
-	int indexEndMonth = 0;
-
-	int indexBeginDay = 0;
-	int indexEndDay = 0;
-
-	String date = {};
-	String year = {};
-	String month = {};
-	String day = {};
-	String fecha = {};
-
-
-	//********FECHA******
-	indexBeginDate = 0;
-	indexEndDate =	filename.indexOf('T');
-
-	date = filename.substring(indexBeginDate,indexEndDate);//obtiene la fecha del ensayo
-	//Serial.println("Fecha: ");
-	//Serial.println(date);
-
-	//********AÑO******
-	indexBeginYear = 0;
-	indexEndYear =	3;
-
-	year = filename.substring(indexBeginYear,indexEndYear + 1);//obtiene el año del ensayo
-	//Serial.println("Año: ");
-	//Serial.println(year);
-
-	//********MES******
-	indexBeginMonth = 4;
-	indexEndMonth =	5;
-
-	month = filename.substring(indexBeginMonth,indexEndMonth + 1);//obtiene el mes del ensayo
-	//Serial.println("Mes: ");
-	//Serial.println(month);
-
-	//********DIA******
-	indexBeginDay = 6;
-	indexEndDay =	7;
-
-	day = filename.substring(indexBeginDay,indexEndDay + 1);//obtiene el día del ensayo
-	//Serial.println("Día: ");
-	//Serial.println(day);
-
-	fecha = year + "-" + month + "-" + day;
-	
-	return fecha;
-
 }
