@@ -15,8 +15,8 @@
                                                               //Sensor 1 , se guardan pendientes y ordenadas al origen (Se linealiza la curva en 10 segmentos)
                                                               //Sensor 2 , se guardan los valores digitales del AD correspondientes a 1kPa y 2kPa. Aqui solo interesa
                                                               //que el valor se mantenga en este rango durante el ensayo. 
-#define addressEEPROM_1kPa  80  //Guarda el valor del AD para 1kPa en el sensor 2 (Fuelle)
-#define addressEEPROM_2kPa  84  //Guarda el valor del AD para 2kPa en el sensor 2 (Fuelle)
+#define addressEEPROM_1kPa  180  //Guarda el valor del AD para 1kPa en el sensor 2 (Fuelle)
+#define addressEEPROM_2kPa  184  //Guarda el valor del AD para 2kPa en el sensor 2 (Fuelle)
 //#define direccionLCD    0x27    //Igual a PCF8574_ADDR_A21_A11_A01
 #define NUMERO_MAQUINA 1
 

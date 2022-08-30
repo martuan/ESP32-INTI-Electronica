@@ -1,13 +1,13 @@
-#ifndef imrpimirLCDI2C_h
-#define imrpimirLCDI2C_h
+#ifndef imprimirLCDI2C_h
+#define imprimirLCDI2C_h
 
 #include <Arduino.h>
 #include <LiquidCrystal_I2C.h>
 #include <hardware.h>
 
-class imrpimirLCDI2C   {
+class imprimirLCDI2C   {
     public:
-        imrpimirLCDI2C(LiquidCrystal_I2C objetoLCD);
+        imprimirLCDI2C(LiquidCrystal_I2C objetoLCD);
         void inicializarLCD(int numColum, int numFilas);
         void imprimirMedicionLCD(String lineaMedicionLCD, int fila);
         void mensajeInicialLCDcalibracion(int numeroSensor);

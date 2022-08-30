@@ -1,18 +1,18 @@
 #include <Arduino.h>
 #include <LiquidCrystal_I2C.h>
-#include "imrpimirLCDI2C.h"
+#include "imprimirLCDI2C.h"
 
-    imrpimirLCDI2C::imrpimirLCDI2C(LiquidCrystal_I2C objetoLCD){
+    imprimirLCDI2C::imprimirLCDI2C(LiquidCrystal_I2C objetoLCD){
         _objetoLCD = objetoLCD;
         
     }
  
 //*********************************************************************************************
-void imrpimirLCDI2C::inicializarLCD(int numColum, int numFilas){
+void imprimirLCDI2C::inicializarLCD(int numColum, int numFilas){
     _objetoLCD.begin(numColum, numFilas);
 }
 //*********************************************************************************************
-void imrpimirLCDI2C::imprimirMedicionLCD(String lineaMedicionLCD, int fila){    //Para facilitar la lectura durante el ensayo se actualiza la última medición en la última fila y la  
+void imprimirLCDI2C::imprimirMedicionLCD(String lineaMedicionLCD, int fila){    //Para facilitar la lectura durante el ensayo se actualiza la última medición en la última fila y la  
   static String lineaMedicionLCDanterior = "";          //medición anterior se corre hacia arriba
     _objetoLCD.setCursor(0, fila);
     _objetoLCD.print("                   ");
@@ -25,7 +25,7 @@ void imrpimirLCDI2C::imprimirMedicionLCD(String lineaMedicionLCD, int fila){    
     lineaMedicionLCDanterior = lineaMedicionLCD; 
 }
 //***************************************************************************************
-void imrpimirLCDI2C::imprimirLCDfijo(String lineaMedicionLCD, int columna, int fila){
+void imprimirLCDI2C::imprimirLCDfijo(String lineaMedicionLCD, int columna, int fila){
 
     _objetoLCD.setCursor(0, fila);
     _objetoLCD.print("                    ");
@@ -33,7 +33,7 @@ void imrpimirLCDI2C::imprimirLCDfijo(String lineaMedicionLCD, int columna, int f
     _objetoLCD.print(lineaMedicionLCD);      
 }
 //***************************************************************************************
-void imrpimirLCDI2C::mensajeInicialLCDcalibracion(int numeroSensor){
+void imprimirLCDI2C::mensajeInicialLCDcalibracion(int numeroSensor){
     imprimirLCDfijo("Con pulsador",0, 0);
     imprimirLCDfijo("CALIBRACION",0, 1);
     imprimirLCDfijo("seleccione sensor",0, 2);
@@ -46,7 +46,7 @@ void imrpimirLCDI2C::mensajeInicialLCDcalibracion(int numeroSensor){
 }
 //**************************************************************************************************
 
-void imrpimirLCDI2C::mensajeLCDcalibracion(int muestraPorPunto, float puntoCalibracion){
+void imprimirLCDI2C::mensajeLCDcalibracion(int muestraPorPunto, float puntoCalibracion){
       String linea_1 = String(muestraPorPunto);
       String linea_2 = "hasta: ";
       linea_1 += " Suba desde cero";

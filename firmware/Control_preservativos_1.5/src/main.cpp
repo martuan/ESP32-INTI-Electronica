@@ -40,9 +40,10 @@ RTC_DS3231 rtc;
 
 #include <manejadorSD.h>
 #include <tiempoCumplido.h>
-#include <hardware.h>
-#include <leerEEPROM.h>
-#include <imrpimirLCDI2C.h>
+#include "hardware.h"
+#include "leerEEPROM.h"
+#include "imprimirLCDI2C.h"
+#include "calibrarSensor.h"
 
 tiempoCumplido tiempoCumplido1(100);
 leerEEPROM leerEEPROM1(addressEEPROM_1kPa, addressEEPROM_2kPa);
@@ -51,12 +52,16 @@ DHT dht(DHTPIN, DHTTYPE);
 LiquidCrystal_I2C lcd1(PCF8574_ADDR_A21_A11_A01, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);  //PCF8574_ADDR_A21_A11_A01 -> dicección I2C del display físico  0X27
 //LiquidCrystal_I2C lcd2(PCF8574_ADDR_A21_A11_A00, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);  //PCF8574_ADDR_A21_A11_A00 -> dicección I2C del display físico 0X26
 
-imrpimirLCDI2C imprimirLcd1(lcd1);
-//imrpimirLCDI2C imprimirLcd2(lcd2);
+imprimirLCDI2C imprimirLcd1(lcd1);
+//imprimirLCDI2C imprimirLcd2(lcd1);
+//imprimirLCDI2C imprimirLcd2(lcd2);
+calibrarSensor calibrarSensores1(lcd1);
+
 
 //Rutina que crea en archivo de registro de nuevo ensayo, lo nombra según formato ISO8601 y Escribe dentro de el el encabezado del ensayo
-void calibracionSensoresPresion(void);
+//void calibracionSensoresPresion(void);
 void fallaEscrituraSD(void);
+void leerEEProm(void);
 
 void setup() {
 
@@ -108,9 +113,50 @@ void setup() {
    
   imprimirLcd1.imprimirLCDfijo("Pulse INICIO",0, 0);
   imprimirLcd1.imprimirLCDfijo("para comenzar",0, 1);
+  int valor1 = 730;
+  int valor2 = -30;
+  int resultado = valor1 + valor2;
+
+    /*EEPROM.writeInt(64, valor1);       //Escribir en EEPROM m en posicion addressEEPROM
+    EEPROM.commit();
+    EEPROM.writeInt(68, valor2);       //Escribir en EEPROM m en posicion addressEEPROM
+    EEPROM.commit();
+    EEPROM.writeInt(72, resultado);       //Escribir en EEPROM m en posicion addressEEPROM
+    EEPROM.commit();
+*/
+  leerEEProm();
+}
+//********Fin Setup***************************************************************************
+void leerEEProm(){
+  int ultimaLecturaEEPROM = 10;
+  int address = 0;
+  int b, m;
+  int cont = 0;
+  int checkSum =0;
+ 
+ while(cont < ultimaLecturaEEPROM){
+    m = EEPROM.readInt(address); //Se lee la pendiente guardada durante la calibración
+      Serial.print("dirección actual: ");
+      Serial.println(address);
+    address += sizeof(m); //update address value  
+      Serial.print("tamaño m: ");
+      Serial.println(m);
+    b = EEPROM.readInt(address); //Se lee la pendiente guardada durante la calibración
+    address += sizeof(b); //update address value  
+      Serial.print("tamaño b: ");
+      Serial.println(b);
+    cont ++;    
+  }
+    Serial.print("dirección checksum: ");
+    Serial.println(address);
+//    checkSum = EEPROM.readInt(address); //Se lee la pendiente guardada durante la calibración
+    checkSum = EEPROM.readInt(address); //Se lee la pendiente guardada durante la calibración
+    Serial.print("CheckSum: ");
+    Serial.println(checkSum);
+
 }
 //******* Calibración ***********************************************************************
-void calibracionSensoresPresion(){
+/*void calibracionSensoresPresion(){
       int numeroSensor = 1;
       int puntoCalibracion = 0;
       int valorAcumulado = 0;
@@ -123,6 +169,7 @@ void calibracionSensoresPresion(){
       int addressEEPROM = 0;
       int cont = 0;
       int valorPresionFuelle;
+      int checkSum1_sensor1 = 0, checkSum2_sensor1 = 0, checkSum1_sensor2 = 0, checkSum2_sensor2 = 0;
       boolean inicio = HIGH;
       boolean calibracion;
       boolean cambioSensor = LOW; 
@@ -181,7 +228,7 @@ void calibracionSensoresPresion(){
         m = int((valorDigitalCalibrado[1] - valorDigitalCalibrado[0])/0.25);
   //      m = int((valorDigitalCalibrado[1] - valorDigitalCalibrado[0])/(valorCalibracion[1] - valorCalibracion[0]));
         b = int(valorDigitalCalibrado[0] - m*valorCalibracion[0]);
-  
+        checkSum1_sensor1 = m + b;
         //Se guadan las constantes de calibración como enteros (4By c/u)
         EEPROM.writeInt(addressEEPROM, m);       //Escribir en EEPROM m en posición 0
         EEPROM.commit();
@@ -195,14 +242,19 @@ void calibracionSensoresPresion(){
         m = int((valorDigitalCalibrado[cont+1] - valorDigitalCalibrado[cont])/0.25);
         b = int(valorDigitalCalibrado[cont] - m*valorCalibracion[cont]);
   
-        EEPROM.writeInt(addressEEPROM, m);       //Escribir en EEPROM m y b en posicion addressEEPROM
+        EEPROM.writeInt(addressEEPROM, m);       //Escribir en EEPROM m en posicion addressEEPROM
         EEPROM.commit();
         addressEEPROM += sizeof(m); //update address value
         EEPROM.writeInt(addressEEPROM, b);       //Escribir en EEPROM b en posicion addressEEPROM
         EEPROM.commit();
         addressEEPROM += sizeof(b); //update address value
         cont ++;
+        checkSum1_sensor1 = m + b;
        }       
+  // ** checksum *****
+        EEPROM.writeInt(addressEEPROM, checkSum1_sensor1);       //Escribir la suma de todos los m y b en posicion addressEEPROM
+        EEPROM.commit();
+
      }
      if(numeroSensor == 2){
         Serial.println("Suba la presión a 1kPa  y presione INICIO");
@@ -238,7 +290,7 @@ void calibracionSensoresPresion(){
 
      //leerEEPROM();  
      leerEEPROM1.obtenerValores();
-}
+}*/
 //******************** Fin calibración ************************************************************
 
 //**************************************************************************************************
@@ -557,7 +609,8 @@ void loop() {
   leerSerie();
   }
   calibracion = digitalRead(pulsadorCalibracion);
-  if(!calibracion)  calibracionSensoresPresion();
+ // if(!calibracion)  calibracionSensoresPresion();
+   if(!calibracion)   calibrarSensores1.calibrar();
         
    estadoPulsadorInicio = digitalRead(pulsadorInicio);
    if(estadoPulsadorInicio == LOW){
