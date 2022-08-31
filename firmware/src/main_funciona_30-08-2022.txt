@@ -1,7 +1,7 @@
 /*  
  *
  *	Programado por: Martín Cioffi y Nestor Mariño
- *  Fecha: 30-08-2022
+ *  Fecha: 05-07-2022
  *
  *	Version 1
  *  
@@ -64,6 +64,7 @@
 	#include <WiFiMulti.h>         // Built-in
 	#include <ESP32WebServer.h>    // https://github.com/Pedroalbuquerque/ESP32WebServer download and place in your Libraries folder
 	#include <ESPmDNS.h>
+	//#include "FS.h"
 	#include <AsyncTCP.h>
 	#include "SPIFFS.h"
 #endif
@@ -71,15 +72,22 @@
 #include "Network.h"
 #include "Sys_Variables.h"
 #include "CSS.h"
+//#include <SD.h> 
+//#include <ArduinoFiles.h>
 #include <SdFat.h>
+//#include <SPI.h>
+
 #include <Wire.h>
 #include <RTClib.h>
 RTC_DS3231 rtc;
 #include <SPI.h>
+//#include <SD.h>
 #include <LiquidCrystal_I2C.h>
 #include <Adafruit_Sensor.h>
 #include "DHT.h"
+//#include "FS.h"
 #include <EEPROM.h>
+
 #include <manejadorSD.h>
 #include <tiempoCumplido.h>
 #include <hardware.h>
@@ -101,7 +109,11 @@ void HomePage();
 void File_Download();
 void SD_file_download(String filename);
 void handleFileUpload();
+void SD_dir();
 void listar_SD_dir();
+//void printDirectory_v3(File dir, int numTabs);
+void printDirectory_v3(SdFile dir, int numTabs);
+void printDirectory_v4(SdFile dir, int numTabs);
 void printDirectory_v5(SdFile root);
 void File_Stream();
 void File_Delete();
@@ -219,9 +231,26 @@ void setup(void){
 		pinMode(19,INPUT_PULLUP);
 	#endif
 
+	
+	//SPI.setFrequency(500000);
+	
+	//SPIClass SPI = SPIClass(VSPI);
+	/*
+	Serial.print("clock Divider: ");
+	Serial.println(SPI.getClockDivider());
+	SPI.setDataMode(3);
+	SPI.setFrequency(80000000);
+	SPI.setClockDivider(SPI_CLOCK_DIV128);
+	Serial.print("clock Divider: ");
+	Serial.println(SPI.getClockDivider());
+	*/
 	SPI.begin(SCK, MISO, MOSI, SD_CS_pin);
+	
+	
 
 	Serial.print(F("Initializing SD card...")); 
+
+	
 
 	SD.begin(SD_CS_pin);//prueba
 	//if (!SD.begin(SD_CS_pin)) { // see if the card is present and can be initialised. Wemos SD-Card CS uses D8 
@@ -236,7 +265,11 @@ void setup(void){
 		Serial.println(F("Card initialised... file access enabled..."));
 		SD_present = true; 
 	}
-
+/*
+	if (!root.open("/Lote grande")) {
+    	sd.errorHalt("open root failed");
+  	}
+	  */
 	// Note: Using the ESP32 and SD_Card readers requires a 1K to 4K7 pull-up to 3v3 on the MISO line, otherwise they do-not function.
 	//----------------------------------------------------------------------   
 	///////////////////////////// Server Commands 
@@ -247,6 +280,7 @@ void setup(void){
 	//server.on("/fupload",  HTTP_POST,[](){ server.send(200);}, handleFileUpload);
 	//server.on("/stream",   File_Stream);
 	server.on("/delete",   File_Delete);
+	//server.on("/dir",      SD_dir);
 	server.on("/dir",      listar_SD_dir);
 	server.on("/consultarPorFecha", ConsultarPorFecha);
 
@@ -448,10 +482,69 @@ void handleFileUpload(){ // upload a new file to the Filing system
   }
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+void SD_dir(){
+  if (SD_present) { 
+    //File root = SD.open("/");
+	
+/*
+
+	if (server.args() > 0 && server.arg(0).compareTo(ultimoDirExplorado) != 0) { // Si se recibieron argumentos y el directorio (argumento) es distinto al anterior
+		if (server.hasArg("directorio")){
+			String directorio = server.arg(0);
+			Serial.print("directorio = ");
+			Serial.println(directorio);
+	//		flagCheckArgs = 1;
+			ultimoDirExplorado = directorio;//guarda en variable auxiliar para futura comparación
+			
+	
+			//printDirectory_v3(entry, numTabs + 1);
+			printDirectory_v3(entry, numTabs + 1);
+		}
+	}
+	*/
+//entry.open()
+	root.open("/");
+	//root.open(pathDirectory.c_str());
+	//File root = SPIFFS.open("/");
+    if (root) {
+      root.rewindDirectory();
+      SendHTML_Header();
+      webpage += F("<h3 class='rcorners_m'>Contenido de la memoria SD</h3><br>");
+	  webpage += F("<form action='/consultarPorFecha'><label for='Fecha'>Fecha: </label><input type='date' id='fechaEnsayo' name='fechaEnsayo'><input type='submit'></form><br>");
+      //webpage += F("<table align='center'>");
+	  webpage += F("<table class='table table-striped'>");
+      //webpage += F("<tr><th>Nombre</th><th>Fecha</th><th style='width:20%'>Archivo/Directorio</th><th>Tama&ntildeo</th><th>Eliminar</th><th>Descargar</th></tr>");
+	  webpage += F("<tr><th scope='col'>Nombre</th><th scope='col'>Fecha</th><th scope='col'>Archivo/Directorio</th><th scope='col'>Tama&ntildeo</th><th scope='col'>Eliminar</th><th scope='col'>Descargar</th></tr>");
+	  webpage += "<tr><td><form action='/dir' method='post'><input type='hidden' name='directorioAtras' id='directorioAtras' value='../'><input type='Submit' value='../'></form></td><td></td><td></td><td></td><td align='center'></td><td></td></tr>";
+
+	  printDirectory_v3(root, 0);
+	  //printDirectory_v4(root, 0);
+
+	  webpage += F("</table>");
+	  fechaEnsayoConsultada = "";
+      SendHTML_Content();
+      root.close();
+    }
+    else 
+    {
+      SendHTML_Header();
+      webpage += F("<h3>No Files Found</h3>");
+    }
+    append_page_footer();
+    SendHTML_Content();
+    SendHTML_Stop();   // Stop is needed because no content length was sent
+  } else ReportSDNotPresent();
+  
+  //pathDirectory = "";//setea el directorio para una nueva búsqueda
+
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 void listar_SD_dir(){
   if (SD_present) { 
     
+	//root.open("/");
+
 	if(server.arg(0) == ROOTDIR){
 
 		root.open(ROOTDIR);
@@ -462,6 +555,7 @@ void listar_SD_dir(){
 
 		if (server.hasArg("directorio")){//si se pide avanzar adelante (un directorio nuevo)
 			
+			//pathDirectory = pathDirectory + "/" + directorio;
 			pathDirectory = pathDirectory + directorio + "/" ;
 			Serial.print("pathDirectory = ");
 			Serial.println(pathDirectory);
@@ -485,6 +579,8 @@ void listar_SD_dir(){
 
 	}
 
+
+	//root.open(pathDirectory.c_str());
 
     if (root) {
       root.rewindDirectory();
@@ -515,6 +611,7 @@ void listar_SD_dir(){
     SendHTML_Stop();   // Stop is needed because no content length was sent
   } else ReportSDNotPresent();
   
+  //pathDirectory = "";//setea el directorio para una nueva búsqueda
 
 }
 
@@ -578,7 +675,220 @@ void printDirectory_v5(SdFile path){
 		}
 		entry.close();
 	}
+
+
+
 }
+
+
+
+
+void printDirectory_v4(SdFile dir, int numTabs){
+
+	entry.openNext(&dir, O_RDONLY);
+	entry.ls();
+	entry.close();
+
+
+
+}
+//void printDirectory_v3(File dir, int numTabs){
+void printDirectory_v3(SdFile dir, int numTabs){
+
+
+	
+	char entryName[100] = {};
+	String nombreDeArchivo = {};
+	String rutaDeArchivo = {};
+	bool hayMasArchivos = 0;
+	String dirNuevo = {};
+	Serial.println("----------------Entra al printDirectory_v3-----------------------");
+	Serial.print("pathDirectory = ");
+	Serial.println(pathDirectory);
+
+
+	while(true){
+
+		
+		String fechaNormalizada = {};
+
+		
+		hayMasArchivos = entry.openNext(&dir, O_RDONLY);
+		
+		Serial.println(hayMasArchivos);
+
+		if(hayMasArchivos == 0){//si no hay más archivos en el directorio actual, retrocede un nivel en pathDirectory
+
+			//pathDirectory = pathDirectory.substring(0, pathDirectory.lastIndexOf('/'));
+			//Serial.print("pathDirectory = ");
+			//Serial.println(pathDirectory);
+			break;
+		}
+
+		if (webpage.length() > 1000) {
+			SendHTML_Content();
+		}
+
+		entry.getName(entryName, 100);//obtiene el nombre de la entrada, ya sea un directorio o un archivo
+		
+		if(entry.isDirectory()){//Si es un directorio y no hay consulta por fechas
+			
+			rutaDeArchivo = String(entryName);
+			//entry.getName(rutaArchivo, 100);
+			//pathDirectory = pathDirectory + "/" + rutaDeArchivo;
+			//pathDirectory = rutaDeArchivo;
+			//Serial.print("Nombre de directorio = ");
+			//Serial.println(rutaDeArchivo);
+			//Serial.print("Ruta actual = ");
+			//Serial.println(pathDirectory);
+
+			if(fechaEnsayoConsultada.length() == 0){//si no hay consulta por fechas
+			
+				
+				webpage += "<tr><td><form action='/dir' method='post'><input type='hidden' name='directorio' id='directorio' value="+ String(rutaDeArchivo) +"><input type='hidden' name='cuenta' id='cuenta' value="+ String(cuenta) +"><input type='Submit' value="+String(rutaDeArchivo)+"></form></td><td></td><td>"+String(entry.isDirectory()?"Dir":"File")+"</td><td></td><td align='center'></td><td></td></tr>";
+
+			}
+					
+			//if (server.args() > 0 && server.arg(0).compareTo(ultimoDirExplorado) != 0) { // Si se recibieron argumentos y el directorio (argumento) es distinto al anterior
+			if (server.args() > 0){ // Si se recibieron argumentos
+
+				String directorio = server.arg(0);
+
+    			if (server.hasArg("directorio")){//si se pide avanzar adelante (un directorio nuevo)
+					
+					Serial.print("directorio = ");
+					Serial.println(directorio);
+					Serial.print("Ruta actual (del POST) = ");
+					Serial.println(pathDirectory);
+					
+					ultimoDirExplorado = directorio;//guarda en variable auxiliar para futura comparación
+					//dirNuevo = pathDirectory + "/" + directorio;
+					//pathDirectory = directorio;//lo último que llegó por POST será la ruta actual
+					pathDirectory = pathDirectory + "/" + directorio;
+					//pathDirectory = pathDirectory + directorio + "/" ;
+					Serial.print("pathDirectory = ");
+					Serial.println(pathDirectory);
+					cuenta++;
+					flagPrintDirectory = 1;
+					//server.argName(0);
+					
+				}else if(server.hasArg("directorioAtras")){//si se pide avanzar atrás (el directorio padre)
+
+					pathDirectory = pathDirectory.substring(0, pathDirectory.lastIndexOf('/'));
+					Serial.print("pathDirectory (atras) = ");
+					Serial.println(pathDirectory);
+					Serial.print("pathDirectory = ");
+					Serial.println(pathDirectory);
+					//directorio = server.arg(0);
+					ultimoDirExplorado = directorio;//guarda en variable auxiliar para futura comparación
+					cuenta++;
+					//entry.open(dirNuevo.c_str());
+					flagPrintDirectory = 1;
+
+				}
+
+					
+
+					
+
+					//if(directorio.compareTo("../") == 0 && server.arg(0).compareTo(ultimoDirExplorado) != 0){//si es igual a ../ vuelve atrás
+
+						
+						//dirNuevo = pathDirectory;//la nueva ubicación es el pathDirectory recortado
+
+				
+
+					//entry.open(pathDirectory.c_str());
+			
+					//printDirectory_v3(entry, numTabs + 1);
+					//if(flagPrintDirectory == 1){
+					//	printDirectory_v3(entry, numTabs + 1);
+					//}
+					
+
+					
+
+					
+			
+					//Serial.print("dirNuevo = ");
+					//Serial.println(dirNuevo);
+					
+					
+					
+
+				
+			}
+		
+		}
+		else//Si es un archivo
+		{
+			
+			nombreDeArchivo = String(entryName);
+			//rutaDeArchivo = rutaDeArchivo + "/" + nombreDeArchivo;
+			rutaDeArchivo = pathDirectory + "/" + nombreDeArchivo;
+			filename = nombreDeArchivo;
+			Serial.println(filename);
+			if(filename.endsWith(".csv")){
+				Serial.println("termina con .csv");
+			}
+
+			//if(filename.length() == 19 && filename.charAt(8) == 'T'){//si el archivo es una fecha de ensayo
+			if(filename.charAt(8) == 'T'){//si el archivo es una fecha de ensayo
+				Serial.print("CharAt(8) = T		");
+				fechaNormalizada = obtenerFechaDeArchivo();
+				Serial.print("fechaNormalizada =");
+				Serial.println(fechaNormalizada);
+
+			}else{
+				fechaNormalizada = "";
+			}
+			
+			//si fechaEnsayoConsultada coincide con fechaNormaliza, arma la tabla con las filas correspondientes
+			//aplica filtro
+			if(fechaEnsayoConsultada.length() > 0){//si se ha realizado consultaPorFecha
+			
+				Serial.print("-------------------------> ");
+				Serial.print("SI se ha realizado consultaPorFecha");
+				Serial.println(" <------------------------ ");
+
+				Serial.print("Fechas: ");
+				Serial.print(fechaNormalizada);
+				Serial.print(" - ");
+				Serial.println(fechaEnsayoConsultada);
+				
+				if(fechaNormalizada.compareTo(fechaEnsayoConsultada) == 0){//si coinciden las fechas
+
+					Serial.println("SI coinciden las fechas");
+				
+					agregaFilaEnTabla(rutaDeArchivo, fechaNormalizada, rutaDeArchivo);
+					
+					
+				}else{//si no coinciden las fechas
+
+					Serial.println("NO coinciden las fechas");
+				}
+			
+			
+			}else{//si no se ha realizado consultaPorFecha, se muestra todo sin filtro
+				
+			/*				
+				Serial.print("-------------------------> ");
+				Serial.print("NO se ha realizado consultaPorFecha");
+				Serial.println(" <------------------------ ");
+
+
+				Serial.print(String(entry.isDirectory()?"Dir ":"File ")+String(entry.name())+"\t");
+			*/
+				
+				agregaFilaEnTabla(rutaDeArchivo, fechaNormalizada, rutaDeArchivo);
+		
+				
+			}		
+		}
+		entry.close();
+	}
+}
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void File_Stream(){
@@ -1210,7 +1520,86 @@ String rutinaInicioEnsayo(){
     }
   return str; 
 }
+//**************************************************************************************************
+/*
+void listDir(fs::FS &fs, const char * dirname, uint8_t levels){   //
+  Serial.println("");
+  Serial.printf("Listado de directorio: %s\n", dirname);
 
+  File root = fs.open(dirname);
+  if(!root){
+    Serial.println("Failed to open directory");
+    return;
+  }
+  if(!root.isDirectory()){
+    Serial.println("Not a directory");
+    return;
+  }
+
+  File file = root.openNextFile();
+  while(file){
+    if(file.isDirectory()){
+      Serial.print("  DIR : ");
+      Serial.println(file.name());     
+      if(levels){
+        listDir(fs, file.name(), levels -1);
+      }
+    }else {
+      Serial.print("  Archivo: ");
+      Serial.print(file.name());
+      Serial.print("  Tamaño: ");
+      Serial.println(file.size());
+    }
+ //     Serial.println("");
+    file = root.openNextFile();
+  }
+}
+//*******************************************************************************************************
+void listSubDir(fs::FS &fs, const char * dirname, uint8_t levels){      //Devuelve el contenido del directorio. Ej.: Enviando "leerSubDir:/20220601" devuelve el contenido dentro del directorio /20220601
+  Serial.println("");
+  Serial.printf("Listado de directorio: %s\n", dirname);
+
+  File root = fs.open(dirname);
+  if(!root){
+    Serial.println("Failed to open directory");
+    return;
+  }
+  if(!root.isDirectory()){
+    Serial.println("Not a directory");
+    return;
+  }
+String rutaNombre = "";
+String nombre = "";
+  File file = root.openNextFile();
+  while(file){
+    if(file.isDirectory()){
+      rutaNombre = file.name();
+      nombre = rutaNombre.substring(9);
+      Serial.println(nombre);
+      if(levels){
+        listDir(fs, file.name(), levels -1);
+      }
+    }
+    file = root.openNextFile();
+  }
+}
+
+//**************************************************************************************
+void leerFile(fs::FS &fs, const char * path){
+  Serial.printf("Leyendo archivo: %s\n", path);
+
+  File file = fs.open(path);
+  if(!file){
+    Serial.println("Failed to open file for reading");
+    return;
+  }
+
+  Serial.println("Datos del archivo: ");
+  while(file.available()){
+    Serial.write(file.read());
+  }
+  file.close();
+}*/
 //******************************************************************************************
 void leerSerie(){
   String comando = "";
@@ -1262,6 +1651,8 @@ void leerSerie(){
 void agregaFilaEnTabla(String nombreDeArchivo, String fechaNormalizada, String rutaDeArchivo){
 
 	webpage += "<tr><td>"+ String(nombreDeArchivo) +"</td><td>"+fechaNormalizada+"</td>";
+	//Serial.print(String(entry.isDirectory()?"Dir ":"File ")+String(nombreDeArchivo)+"\t");
+	//Serial.print(String(entry.isDirectory()?"Dir ":"File ")+String(rutaDeArchivo)+"\t");
 	webpage += "<td>"+String(entry.isDirectory()?"Dir":"File")+"</td>";
 	int bytes = entry.size();
 	String fsize = "";

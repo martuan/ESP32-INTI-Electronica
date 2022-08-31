@@ -7,10 +7,11 @@ bool   SD_present = false;
 //strcpy(dest, "/");
 char src[100] = "";
 char dest[100] = "/";
-String pathDirectory = {};
-//String pathDirectory = "/";
+//String pathDirectory = {};
+String pathDirectory = "/";
 String pathLocation = {};
 int cuenta = 0;
+bool flagPrintDirectory = 0;
 
 #ifdef ESP8266
 #define SD_CS_pin           D8         // The pin on Wemos D1 Mini for SD Card Chip-Select
