@@ -39,7 +39,15 @@ void append_page_header() {
 
   webpage += F("a{font-size:75%;}");
   webpage += F("p{font-size:75%;}");
-  webpage += F("</style></head><body><h1>ESP32 Datalogger Webserver - INTI</h1>");
+  webpage += F("</style></head><body><table><tr><td><h1>ESP32 Datalogger Webserver - INTI</h1></td>");
+  //if(flagWebserverLibre == 0){//si está ocupado deshabilita el login
+  if(flagUsuarioLogueado == 1){//si está logueado deshabilita el login y habilita el logout
+	webpage += ("<td><form action='/login' method='post'><input type='hidden' name='login' id='login' value='login'><input type='Submit' value='Login' disabled></form></td><td>Usuario: " + usernameLogin + "</td><td><form action='/logout' method='post'><input type='hidden' name='logout' id='logout' value='logout'><input type='Submit' value='Logout'></form></td></tr></table>");	  
+  //}else{//si está libre deshabilita el logout
+  }else{//si no está logueado habilita el login y deshabilita el logout
+	webpage += ("<td><form action='/login' method='post'><input type='hidden' name='login' id='login' value='login'><input type='Submit' value='Login'></form></td><td>Usuario: </td><td><form action='/logout' method='post'><input type='hidden' name='logout' id='logout' value='logout'><input type='Submit' value='Logout' disabled></form></td></tr></table>");
+  }
+  
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void append_page_footer(){ // Saves repeating many lines of code for HTML page footers

@@ -12,6 +12,16 @@ String pathDirectory = "/";
 String pathLocation = {};
 int cuenta = 0;
 bool flagPrintDirectory = 0;
+String usernameLogin = {};
+String passwordLogin = {};
+
+String usernameLoginEnabled1 = "martin";
+String passwordLoginEnabled1 = "luna";
+String usernameLoginEnabled2 = "martin";
+String passwordLoginEnabled2 = "cioffi";
+bool flagUsuarioHabilitado = 0;
+bool flagWebserverLibre = 1;
+bool flagUsuarioLogueado = 0;
 
 #ifdef ESP8266
 #define SD_CS_pin           D8         // The pin on Wemos D1 Mini for SD Card Chip-Select

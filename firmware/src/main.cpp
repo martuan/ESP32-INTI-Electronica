@@ -103,6 +103,8 @@ void SD_file_download(String filename);
 void handleFileUpload();
 void listar_SD_dir();
 void printDirectory_v5(SdFile root);
+void mostrarLogin(void);
+void mostrarLogout(void);
 void File_Stream();
 void File_Delete();
 void SD_file_delete(String filename);
@@ -249,6 +251,8 @@ void setup(void){
 	server.on("/delete",   File_Delete);
 	server.on("/dir",      listar_SD_dir);
 	server.on("/consultarPorFecha", ConsultarPorFecha);
+	server.on("/login", mostrarLogin);
+	server.on("/logout", mostrarLogout);
 
   ///////////////////////////// End of Request commands
   	server.begin();
@@ -314,6 +318,12 @@ void setup(void){
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void loop(void){
 	server.handleClient(); // Listen for client connections
+	/*
+	Serial.print("cuenta: ");
+	Serial.println(cuenta);
+	cuenta++;
+	delay(3000);
+	*/
 	//server.addHandler();
 /*
 	//  boolean tiempoCumplido;
@@ -343,10 +353,77 @@ void loop(void){
 
 void HomePage(){
 
-  SendHTML_Header();
+	//SendHTML_Header();
+	
+	
+
+	if (server.hasArg("user") && server.hasArg("pass")){//si se cambia el login
+		usernameLogin = server.arg(0);//captura el username
+		passwordLogin = server.arg(1);//captura el password
+		
+		//webpage += ("<p> Usuario logueado: " + usernameLogin + " Password: " + passwordLogin + "</p>");
+		
+
+		//validación de credenciales de acceso
+		if(usernameLogin == usernameLoginEnabled1 && passwordLogin == passwordLoginEnabled1){
+			//flagUsuarioHabilitado = 1;
+			flagUsuarioLogueado = 1;
+			//flagWebserverLibre = 0;//si coinciden las credenciales, el webserver queda en estado Ocupado
+			append_page_header();
+			webpage += ("<p>Usuario habilitado</p>");
+			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
+
+		}else{
+
+			//flagUsuarioHabilitado = 0;
+			flagUsuarioLogueado = 0;
+			append_page_header();
+			webpage += ("<p>Usuario incorrecto</p>");
+			webpage += F("<p>Debe loguearse</p>");
+			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled></form>");
+		}
+	}else{
+
+		append_page_header();
+		webpage += F("<p>Debe loguearse</p>");
+	}
+
+
+
   
-  fechaEnsayoConsultada = "";
-  webpage += F("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
+	fechaEnsayoConsultada = "";
+	/*
+	if(flagUsuarioLogueado == 0){//si no hay usario habilitado, debe loguearse
+	//if(flagUsuarioHabilitado == 0){//si no hay usario habilitado, debe loguearse
+
+		webpage += F("<p>Debe loguearse</p>");	
+
+
+	}else{//si ya está logueado
+
+		webpage += F("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
+
+	}
+*/
+//   if(flagWebserverLibre){//si nadie está usando el webserver, no hay nadie logueado
+
+// 	//if(flagUsuarioHabilitado){//si está logueado con un usuario habilitado
+
+// 		webpage += F("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
+// /*
+// 	}else{
+		
+// 		webpage += F("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled></form>");	  
+// 		webpage += F("<p>Debe estar logueado para acceder</p>");	  
+	
+// 	}
+// */
+//   }else{
+
+// 	  webpage += F("<p>Ya hay un usuario en el webserver</p>");	  
+
+//   }
+  //webpage += F("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
   append_page_footer();
   SendHTML_Content();
   SendHTML_Stop(); // Stop is needed because no content length was sent
@@ -450,70 +527,80 @@ void handleFileUpload(){ // upload a new file to the Filing system
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 void listar_SD_dir(){
-  if (SD_present) { 
+
+	//if(flagUsuarioHabilitado){
+	if(flagUsuarioLogueado){
+
+		 if (SD_present) { 
     
-	if(server.arg(0) == ROOTDIR){
+			if(server.arg(0) == ROOTDIR){
 
-		root.open(ROOTDIR);
+				root.open(ROOTDIR);
 
-	}else{
+			}else{
 
-		String directorio = server.arg(0);
+				String directorio = server.arg(0);
 
-		if (server.hasArg("directorio")){//si se pide avanzar adelante (un directorio nuevo)
-			
-			pathDirectory = pathDirectory + directorio + "/" ;
-			Serial.print("pathDirectory = ");
-			Serial.println(pathDirectory);
-			
-		}else if(server.hasArg("directorioAtras")){//si se pide avanzar atrás (el directorio padre)
+				if (server.hasArg("directorio")){//si se pide avanzar adelante (un directorio nuevo)
+					
+					pathDirectory = pathDirectory + directorio + "/" ;
+					Serial.print("pathDirectory = ");
+					Serial.println(pathDirectory);
+					
+				}else if(server.hasArg("directorioAtras")){//si se pide avanzar atrás (el directorio padre)
 
-			if(pathDirectory != ROOTDIR){
-				
-				
-				pathDirectory = pathDirectory.substring(0, pathDirectory.lastIndexOf('/'));//recorta
-				pathDirectory = pathDirectory.substring(0, pathDirectory.lastIndexOf('/')+1);//recorta
-				Serial.print("pathDirectory (atras) = ");
-				Serial.println(pathDirectory);
+					if(pathDirectory != ROOTDIR){
+						
+						
+						pathDirectory = pathDirectory.substring(0, pathDirectory.lastIndexOf('/'));//recorta
+						pathDirectory = pathDirectory.substring(0, pathDirectory.lastIndexOf('/')+1);//recorta
+						Serial.print("pathDirectory (atras) = ");
+						Serial.println(pathDirectory);
+
+					}
+					
+
+				}
+
+				root.open(pathDirectory.c_str());
 
 			}
-			
 
-		}
 
-		root.open(pathDirectory.c_str());
+			if (root) {
+			root.rewindDirectory();
+			SendHTML_Header();
+			webpage += F("<h3 class='rcorners_m'>Contenido de la memoria SD</h3><br>");
+			webpage += F("<form action='/consultarPorFecha'><label for='Fecha'>Fecha: </label><input type='date' id='fechaEnsayo' name='fechaEnsayo'><input type='submit'></form><br>");
+
+			webpage += "<h3 align = 'left'>Directorio actual = "+ pathDirectory + "</h3>";
+
+			webpage += F("<table class='table table-striped'>");
+			webpage += F("<tr><th scope='col'>Nombre</th><th scope='col'>Fecha</th><th scope='col'>Archivo/Directorio</th><th scope='col'>Tama&ntildeo</th><th scope='col'>Eliminar</th><th scope='col'>Descargar</th></tr>");
+			webpage += "<tr><td><form action='/dir' method='post'><input type='hidden' name='directorioAtras' id='directorioAtras' value='../'><input type='Submit' value='../'></form></td><td></td><td></td><td></td><td align='center'></td><td></td></tr>";
+
+			printDirectory_v5(root);
+
+			webpage += F("</table>");
+			fechaEnsayoConsultada = "";
+			SendHTML_Content();
+			root.close();
+			}
+			else 
+			{
+			SendHTML_Header();
+			webpage += F("<h3>No Files Found</h3>");
+			}
+			append_page_footer();
+			SendHTML_Content();
+			SendHTML_Stop();   // Stop is needed because no content length was sent
+		} else ReportSDNotPresent();
+
+
 
 	}
 
-
-    if (root) {
-      root.rewindDirectory();
-      SendHTML_Header();
-      webpage += F("<h3 class='rcorners_m'>Contenido de la memoria SD</h3><br>");
-	  webpage += F("<form action='/consultarPorFecha'><label for='Fecha'>Fecha: </label><input type='date' id='fechaEnsayo' name='fechaEnsayo'><input type='submit'></form><br>");
-
-	  webpage += "<h3 align = 'left'>Directorio actual = "+ pathDirectory + "</h3>";
-
-	  webpage += F("<table class='table table-striped'>");
-	  webpage += F("<tr><th scope='col'>Nombre</th><th scope='col'>Fecha</th><th scope='col'>Archivo/Directorio</th><th scope='col'>Tama&ntildeo</th><th scope='col'>Eliminar</th><th scope='col'>Descargar</th></tr>");
-	  webpage += "<tr><td><form action='/dir' method='post'><input type='hidden' name='directorioAtras' id='directorioAtras' value='../'><input type='Submit' value='../'></form></td><td></td><td></td><td></td><td align='center'></td><td></td></tr>";
-
-	  printDirectory_v5(root);
-
-	  webpage += F("</table>");
-	  fechaEnsayoConsultada = "";
-      SendHTML_Content();
-      root.close();
-    }
-    else 
-    {
-      SendHTML_Header();
-      webpage += F("<h3>No Files Found</h3>");
-    }
-    append_page_footer();
-    SendHTML_Content();
-    SendHTML_Stop();   // Stop is needed because no content length was sent
-  } else ReportSDNotPresent();
+ 
   
 
 }
@@ -1341,3 +1428,63 @@ String obtenerFechaDeArchivo(void){
 	return fecha;
 
 }
+
+void mostrarLogin(void){
+
+	
+	
+	append_page_header();
+	
+	webpage += F("<h2>Login</h2>");
+  	webpage += F("<form action='/' method='post'><label for='user'><b>Username: </b></label><input type='text' name='user' id='user' value=''><label for='pass'><b>Password: </b></label><input type='text' name='pass' id='pass' value=''><input type='Submit' value='Aceptar'></form>");
+	
+	pathDirectory = "/";//resetea el pathDirectory para realizar una nueva navegación
+	
+/*
+	if (server.hasArg("user") && server.hasArg("pass")){//si se cambia el login
+		usernameLogin = server.arg(0);//captura el username
+		passwordLogin = server.arg(1);//captura el password
+		webpage += ("<p> Usuario logueado: " + usernameLogin + " Password: " + passwordLogin + "</p>");
+		
+
+		//validación de credenciales de acceso
+		if(usernameLogin == usernameLoginEnabled1 && passwordLogin == passwordLoginEnabled1){
+			flagUsuarioHabilitado = 1;
+			flagUsuarioLogueado = 1;
+			flagWebserverLibre = 0;//si coinciden las credenciales, el webserver queda en estado Ocupado
+			webpage += ("<p>Usuario habilitado</p>");
+			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
+
+		}else{
+			flagUsuarioHabilitado = 0;
+			
+			webpage += ("<p>Usuario incorrecto</p>");
+			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled></form>");
+		}
+	}
+*/		
+	append_page_footer();
+	server.send(200,"text/html",webpage);
+
+}
+
+void mostrarLogout(void){
+
+	flagUsuarioHabilitado = 0;
+	flagWebserverLibre = 1;
+	flagUsuarioLogueado = 0;
+	usernameLogin = "";
+	passwordLogin = "";
+	
+	append_page_header();
+	
+	webpage += ("<h2>Logout (usuario deslogueago)</h2>");
+	webpage += ("<p>Para usar el sistema debe loguearse</p>");
+  	
+
+		
+	append_page_footer();
+	server.send(200,"text/html",webpage);
+
+}
+
