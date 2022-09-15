@@ -41,12 +41,52 @@ void append_page_header() {
   webpage += F("p{font-size:75%;}");
   webpage += F("</style></head><body><table><tr><td><h1>ESP32 Datalogger Webserver - INTI</h1></td>");
   //if(flagWebserverLibre == 0){//si está ocupado deshabilita el login
-  if(flagUsuarioLogueado == 1){//si está logueado deshabilita el login y habilita el logout
+  //if(flagUsuarioLogueado == 1){//si está logueado deshabilita el login y habilita el logout
+/*
+  if(flagClienteNuevo == 0){//si está logueado deshabilita el login y habilita el logout
 	webpage += ("<td><form action='/login' method='post'><input type='hidden' name='login' id='login' value='login'><input type='Submit' value='Login' disabled></form></td><td>Usuario: " + usernameLogin + "</td><td><form action='/logout' method='post'><input type='hidden' name='logout' id='logout' value='logout'><input type='Submit' value='Logout'></form></td></tr></table>");	  
   //}else{//si está libre deshabilita el logout
   }else{//si no está logueado habilita el login y deshabilita el logout
 	webpage += ("<td><form action='/login' method='post'><input type='hidden' name='login' id='login' value='login'><input type='Submit' value='Login'></form></td><td>Usuario: </td><td><form action='/logout' method='post'><input type='hidden' name='logout' id='logout' value='logout'><input type='Submit' value='Logout' disabled></form></td></tr></table>");
   }
+*/
+/*
+	if(flagUsuarioLogueado == 0 && flagClienteNuevo == 1){//logout deshabilitado, login habilitado
+		webpage += ("<td><form action='/login' method='post'><input type='hidden' name='login' id='login' value='login'><input type='Submit' value='Login'></form></td><td>Usuario: </td><td><form action='/logout' method='post'><input type='hidden' name='logout' id='logout' value='logout'><input type='Submit' value='Logout' disabled></form></td></tr></table>");
+	}else if(flagUsuarioLogueado == 1 && flagClienteNuevo == 1){//logout deshabilitado, login deshabilitado
+		webpage += ("<td><form action='/login' method='post'><input type='hidden' name='login' id='login' value='login'><input type='Submit' value='Login' disabled></form></td><td>Usuario: "+ usernameLogin +"</td><td><form action='/logout' method='post'><input type='hidden' name='logout' id='logout' value='logout'><input type='Submit' value='Logout' disabled></form></td></tr></table>");
+	}else if(flagUsuarioLogueado == 1 && flagClienteNuevo == 0){//logout habilitado, login deshabilitado
+		webpage += ("<td><form action='/login' method='post'><input type='hidden' name='login' id='login' value='login'><input type='Submit' value='Login' disabled></form></td><td>Usuario: "+ usernameLogin +"</td><td><form action='/logout' method='post'><input type='hidden' name='logout' id='logout' value='logout'><input type='Submit' value='Logout'></form></td></tr></table>");
+	}
+*/
+/*
+	if (server.hasArg("logout")){//si se desloguea
+
+		Serial.print("Llegó argumento Logout");
+		flagUsuarioLogueado = 0;
+		flagClienteNuevo = 0;
+		usernameLogin = "";
+	
+	}
+	if (server.hasArg("reintentar")){//si se desloguea
+
+		flagUsuarioLogueado = 0;
+		flagClienteNuevo = 0;
+		usernameLogin = "";
+	
+	}
+*/
+	if(flagUsuarioLogueado == 0 && flagClienteNuevo == 1){//logout deshabilitado, login habilitado
+		webpage += ("<td>Usuario: </td><td><form action='/' method='post'><input type='hidden' name='logout' id='logout' value='logout'><input type='Submit' value='Logout' disabled></form></td></tr></table>");
+	}else if(flagUsuarioLogueado == 1 && flagClienteNuevo == 1){//logout deshabilitado, login deshabilitado
+		webpage += ("<td>Usuario: "+ usernameLogin +"</td><td><form action='/' method='post'><input type='hidden' name='logout' id='logout' value='logout'><input type='Submit' value='Logout' disabled></form></td></tr></table>");
+		webpage += ("<form action='/' method='post'><input type='hidden' name='refresh' id='refresh' value='refresh'><input type='Submit' value='Refrescar'></form>");
+	}else if(flagUsuarioLogueado == 1 && flagClienteNuevo == 0){//logout habilitado, login deshabilitado
+		webpage += ("<td>Usuario: "+ usernameLogin +"</td><td><form action='/' method='post'><input type='hidden' name='logout' id='logout' value='logout'><input type='Submit' value='Logout'></form></td></tr></table>");
+	}else if(flagUsuarioLogueado == 0 && flagClienteNuevo == 0){//logout deshabilitado, login habilitado
+		webpage += ("<td>Usuario: "+ usernameLogin +"</td></tr></table>");
+	}			
+
   
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

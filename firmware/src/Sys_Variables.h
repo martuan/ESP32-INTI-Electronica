@@ -22,6 +22,14 @@ String passwordLoginEnabled2 = "cioffi";
 bool flagUsuarioHabilitado = 0;
 bool flagWebserverLibre = 1;
 bool flagUsuarioLogueado = 0;
+bool flagClienteNuevo = 0;
+
+
+
+String clienteEntrante = {};
+String clienteActual = "0.0.0.0";
+
+
 
 #ifdef ESP8266
 #define SD_CS_pin           D8         // The pin on Wemos D1 Mini for SD Card Chip-Select

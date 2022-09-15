@@ -68,9 +68,7 @@
 	#include "SPIFFS.h"
 #endif
 
-#include "Network.h"
-#include "Sys_Variables.h"
-#include "CSS.h"
+
 #include <SdFat.h>
 #include <Wire.h>
 #include <RTClib.h>
@@ -95,6 +93,10 @@ RTC_DS3231 rtc;
   WiFiMulti wifiMulti;
   ESP32WebServer server(80);
 #endif
+
+#include "Network.h"
+#include "Sys_Variables.h"
+#include "CSS.h"
 
 // ********** Funciones del webserver ***************
 void HomePage();
@@ -123,6 +125,9 @@ void initSPIFFS(void);
 void ConsultarPorFecha();
 void agregaFilaEnTabla(String nombreDeArchivo, String fechaNormalizada, String rutaDeArchivo);
 String obtenerFechaDeArchivo(void);
+void toggleLED10veces(void);
+void chequeoIP(void);
+void mostrarMenu(void);
 
 // ********** Funciones del controlador ***************
 
@@ -139,6 +144,11 @@ SdFile root;
 SdFile file;
 SdFile entry;
 
+WiFiClient client;
+
+
+
+
 //Rutina que crea en archivo de registro de nuevo ensayo, lo nombra según formato ISO8601 y Escribe dentro de el el encabezado del ensayo
 void calibracionSensoresPresion(void);
 //void leerEEPROM(void);
@@ -154,6 +164,8 @@ char estadoPin = 0;
 bool flagCheckArgs = 0;
 String ultimoDirExplorado = {};
 
+int pinLED = 15;
+
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void setup(void){
   
@@ -161,6 +173,7 @@ void setup(void){
 
 	//initSPIFFS();
 	pinMode(16, OUTPUT);
+	pinMode(pinLED, OUTPUT);
 	
 	//File root;
   	int cuenta = 0;
@@ -191,7 +204,10 @@ void setup(void){
 		Serial.println("Conectado a red WiFi!");
 		Serial.println("Dirección IP: ");
 		Serial.println(WiFi.localIP());
-		delay(5000);
+		
+		//delay(5000);
+		
+		
 	}
 	/*
 	//************************CONFIG MULTIWIFI***************************************
@@ -253,9 +269,11 @@ void setup(void){
 	server.on("/consultarPorFecha", ConsultarPorFecha);
 	server.on("/login", mostrarLogin);
 	server.on("/logout", mostrarLogout);
+	server.on("/menu", mostrarMenu);
 
   ///////////////////////////// End of Request commands
   	server.begin();
+	//client = server.client();
   	Serial.println("HTTP server started");
 
 
@@ -318,6 +336,7 @@ void setup(void){
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void loop(void){
 	server.handleClient(); // Listen for client connections
+	
 	/*
 	Serial.print("cuenta: ");
 	Serial.println(cuenta);
@@ -346,6 +365,23 @@ void loop(void){
    		rutinaEnsayo(nombreArchivo);
    }
   */     
+
+	
+	boolean estadoPulsadorInicio;
+
+	estadoPulsadorInicio = digitalRead(21);
+
+	if(estadoPulsadorInicio == LOW && flagWebserverLibre){//chequea que no se esté accediendo a la memoria SD desde el webserver
+	
+		flagWebserverLibre = 0;//se ocupa el webserver
+		Serial.println("NO se puede acceder a la memoria SD desde el webserver");
+		toggleLED10veces();
+		flagWebserverLibre = 1;//se libera el webserver
+		Serial.println("SI se puede acceder a la memoria SD desde el webserver");
+	
+	}
+
+
 }
 
 // All supporting functions from here...
@@ -354,41 +390,190 @@ void loop(void){
 void HomePage(){
 
 	//SendHTML_Header();
+/*
+	if (server.hasArg("user") && server.hasArg("pass")){//si se cambia el login
+		usernameLogin = server.arg(0);//captura el username
+		passwordLogin = server.arg(1);//captura el password
+		
+		//validación de credenciales de acceso
+		if(usernameLogin == usernameLoginEnabled1 && passwordLogin == passwordLoginEnabled1){
+			//flagUsuarioHabilitado = 1;
+			flagUsuarioLogueado = 1;
+			//flagWebserverLibre = 0;//si coinciden las credenciales, el webserver queda en estado Ocupado
+			
+
+		}else{
+
+			//flagUsuarioHabilitado = 0;
+			flagUsuarioLogueado = 0;
+			
+		}
+*/
+
+	//client = server.client();
+
+	//chequeoIP();
+	
+
+
+/*
+
+	//clienteEntrante = client.remoteIP().toString();//cuando se conecta un nuevo cliente al HomePage, guarda la IP
+	clienteEntrante = server.client().remoteIP().toString();//cuando se conecta un nuevo cliente al HomePage, guarda la IP
+	Serial.println("la IP entrante es: ");
+	Serial.println(clienteEntrante);
+
+	if(flagUsuarioLogueado == 0){//si viene del logout, solo debe ofrecer login
+
+		flagClienteNuevo = 1;//solo debe ofrecer login
+		Serial.println("Viene del logout");
+		
+		append_page_header();
+		webpage += ("<p>Viene del logout. Debe loguearse para navegar</p>");
+		webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled ></form>");
+
+	
+	
+	
+	
+	
+	}else{//si clienteActual ya tiene una IP, si hay usuarioLogueado
+
+	Serial.print("clienteEntrante: ");
+	Serial.println(clienteEntrante);
+	Serial.print("clienteActual: ");
+	Serial.println(clienteActual);
+
+		//detección de clienteEntrante por primera vez (distinto de 0.0.0.0)
+		if(clienteEntrante != clienteActual){//Si la IP entrante es distinta de la actual, es un cliente nuevo
+
+			flagClienteNuevo = 1;//no debe ofrece nada, no puede navegar
+			Serial.println("clienteEntrante distinto del actual");
+			Serial.println("NUEVA IP: ");
+			Serial.println(clienteEntrante);
+			
+			append_page_header();
+			webpage += ("<p>clienteEntrante distinto del actual. Debe solicitar el deslogueo o esperar timeout</p>");
+			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled ></form>");
+
+		}else{//si es la misma IP
+
+			flagClienteNuevo = 0;//solo debe ofrecer logout 
+			Serial.println("clienteEntrante es igual al actual: ofrece logout y permite navegación");
+			
+			append_page_header();
+			webpage += ("<p>clienteEntrante igual al actual (misma IP)</p>");
+			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
+			
+
+		}
+
+
+
+	}
+*/
+
+	//append_page_header();
+
+	if (server.hasArg("logout") || server.hasArg("reintentar")){//si se desloguea
+
+		Serial.print("Llegó argumento Logout");
+		flagUsuarioLogueado = 0;
+		flagClienteNuevo = 0;
+		usernameLogin = "";
+	
+	}
+
+	Serial.print("HOME -- flagUsuarioLogueado: ");
+	Serial.println(flagUsuarioLogueado);
+
+	
+
+	if(flagUsuarioLogueado == 1){//si ya hay un usuario logueado no muestra el login
+
+		Serial.println("Ya existe un usuario logueado");
+		chequeoIP();
+
+	}else{//si no hay usuario logueado, muestra el login
+		
+		Serial.println("No existe un usuario logueado");
+		append_page_header();
+		webpage += F("<h2>Login</h2>");
+  		webpage += F("<form action='/menu' method='post'><label for='user'><b>Username: </b></label><input type='text' name='user' id='user' value=''><label for='pass'><b>Password: </b></label><input type='text' name='pass' id='pass' value=''><input type='Submit' value='Login'></form>");
+
+	}
+	
+	
+	pathDirectory = "/";//resetea el pathDirectory para realizar una nueva navegación
+	
+
+	
+
+
+
+	append_page_footer();
+	SendHTML_Content();
+	SendHTML_Stop(); // Stop is needed because no content length was sent
+/*
+	
+
+	
+
+	//client = server.client();
+	//cliente = client.remoteIP().toString();
+
+	//if(cliente)
+	//Serial.println(cliente);
+	//Serial.println(client.remoteIP());
 	
 	
 
-	if (server.hasArg("user") && server.hasArg("pass")){//si se cambia el login
+	
+	if(flagUsuarioLogueado == 0){
+
+		if (server.hasArg("user") && server.hasArg("pass")){//si se cambia el login
 		usernameLogin = server.arg(0);//captura el username
 		passwordLogin = server.arg(1);//captura el password
 		
 		//webpage += ("<p> Usuario logueado: " + usernameLogin + " Password: " + passwordLogin + "</p>");
 		
 
-		//validación de credenciales de acceso
-		if(usernameLogin == usernameLoginEnabled1 && passwordLogin == passwordLoginEnabled1){
-			//flagUsuarioHabilitado = 1;
-			flagUsuarioLogueado = 1;
-			//flagWebserverLibre = 0;//si coinciden las credenciales, el webserver queda en estado Ocupado
-			append_page_header();
-			webpage += ("<p>Usuario habilitado</p>");
-			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
+			//validación de credenciales de acceso
+			if(usernameLogin == usernameLoginEnabled1 && passwordLogin == passwordLoginEnabled1){
+				//flagUsuarioHabilitado = 1;
+				flagUsuarioLogueado = 1;
+				//flagWebserverLibre = 0;//si coinciden las credenciales, el webserver queda en estado Ocupado
+				append_page_header();
+				webpage += ("<p>Usuario habilitado</p>");
+				webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
 
+			}else{
+
+				//flagUsuarioHabilitado = 0;
+				flagUsuarioLogueado = 0;
+				append_page_header();
+				webpage += ("<p>Usuario incorrecto</p>");
+				webpage += F("<p>Debe loguearse</p>");
+				webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled></form>");
+			}
 		}else{
 
-			//flagUsuarioHabilitado = 0;
-			flagUsuarioLogueado = 0;
 			append_page_header();
-			webpage += ("<p>Usuario incorrecto</p>");
 			webpage += F("<p>Debe loguearse</p>");
-			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled></form>");
 		}
-	}else{
+
+	}else{//si ya existe un usuario logueado
 
 		append_page_header();
-		webpage += F("<p>Debe loguearse</p>");
+		webpage += F("<p>Ya existe un usuario logueado</p>");
+
+
 	}
+	
 
+	
 
+*/
 
   
 	fechaEnsayoConsultada = "";
@@ -424,22 +609,24 @@ void HomePage(){
 
 //   }
   //webpage += F("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
-  append_page_footer();
-  SendHTML_Content();
-  SendHTML_Stop(); // Stop is needed because no content length was sent
+
   
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void File_Download(){ // This gets called twice, the first pass selects the input, the second pass then processes the command line arguments
   
-  if (server.args() > 0 ) { // Arguments were received
-    if (server.hasArg("download")){
-		SD_file_download(server.arg(0));
-		Serial.print("argumento = ");
-		Serial.println(server.arg(0));
-	} 
-  }
-  else SelectInput("Enter filename to download","download","download");
+	flagWebserverLibre = 0;//se ocupa el webserver
+
+	if (server.args() > 0 ) { // Arguments were received
+		if (server.hasArg("download")){
+			SD_file_download(server.arg(0));
+			Serial.print("argumento = ");
+			Serial.println(server.arg(0));
+		} 
+	}
+	else SelectInput("Enter filename to download","download","download");
+
+  	flagWebserverLibre = 1;//se libera el webserver
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void SD_file_download(String filename){
@@ -528,10 +715,15 @@ void handleFileUpload(){ // upload a new file to the Filing system
 
 void listar_SD_dir(){
 
+	append_page_header();
+
+	//flagWebserverLibre = 0;//se ocupa el webserver
 	//if(flagUsuarioHabilitado){
 	if(flagUsuarioLogueado){
 
-		 if (SD_present) { 
+		 if (SD_present) {
+			 
+			 //chequeoIP() 
     
 			if(server.arg(0) == ROOTDIR){
 
@@ -569,7 +761,8 @@ void listar_SD_dir(){
 
 			if (root) {
 			root.rewindDirectory();
-			SendHTML_Header();
+			//chequeoIP();
+			//SendHTML_Header();
 			webpage += F("<h3 class='rcorners_m'>Contenido de la memoria SD</h3><br>");
 			webpage += F("<form action='/consultarPorFecha'><label for='Fecha'>Fecha: </label><input type='date' id='fechaEnsayo' name='fechaEnsayo'><input type='submit'></form><br>");
 
@@ -588,7 +781,8 @@ void listar_SD_dir(){
 			}
 			else 
 			{
-			SendHTML_Header();
+			//chequeoIP();	
+			//SendHTML_Header();
 			webpage += F("<h3>No Files Found</h3>");
 			}
 			append_page_footer();
@@ -600,7 +794,7 @@ void listar_SD_dir(){
 
 	}
 
- 
+ 	//flagWebserverLibre = 1;//se libera el webserver
   
 
 }
@@ -690,11 +884,17 @@ void SD_file_stream(String filename) {
 }   
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void File_Delete(){
-  if (server.args() > 0 ) { // Arguments were received
-    if (server.hasArg("delete")) SD_file_delete(server.arg(0));
-  }
-  else SelectInput("Select a File to Delete","delete","delete");
+
+	flagWebserverLibre = 0;//se ocupa el webserver
+
+	if (server.args() > 0 ) { // Arguments were received
+		if (server.hasArg("delete")) SD_file_delete(server.arg(0));
+	}
+	else SelectInput("Select a File to Delete","delete","delete");
+
+	flagWebserverLibre = 1;//se libera el webserver
 }
+
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void SD_file_delete(String filename) { // Delete the file 
   if (SD_present) { 
@@ -1429,18 +1629,20 @@ String obtenerFechaDeArchivo(void){
 
 }
 
+/*
 void mostrarLogin(void){
 
 	
 	
-	append_page_header();
+	//append_page_header();
+	chequeoIP();
 	
 	webpage += F("<h2>Login</h2>");
-  	webpage += F("<form action='/' method='post'><label for='user'><b>Username: </b></label><input type='text' name='user' id='user' value=''><label for='pass'><b>Password: </b></label><input type='text' name='pass' id='pass' value=''><input type='Submit' value='Aceptar'></form>");
+  	webpage += F("<form action='/login' method='post'><label for='user'><b>Username: </b></label><input type='text' name='user' id='user' value=''><label for='pass'><b>Password: </b></label><input type='text' name='pass' id='pass' value=''><input type='Submit' value='Aceptar'></form>");
 	
 	pathDirectory = "/";//resetea el pathDirectory para realizar una nueva navegación
 	
-/*
+
 	if (server.hasArg("user") && server.hasArg("pass")){//si se cambia el login
 		usernameLogin = server.arg(0);//captura el username
 		passwordLogin = server.arg(1);//captura el password
@@ -1449,32 +1651,90 @@ void mostrarLogin(void){
 
 		//validación de credenciales de acceso
 		if(usernameLogin == usernameLoginEnabled1 && passwordLogin == passwordLoginEnabled1){
-			flagUsuarioHabilitado = 1;
+			//flagUsuarioHabilitado = 1;
 			flagUsuarioLogueado = 1;
 			flagWebserverLibre = 0;//si coinciden las credenciales, el webserver queda en estado Ocupado
+			//clienteActual = client.remoteIP().toString();
+			clienteActual = clienteEntrante;
 			webpage += ("<p>Usuario habilitado</p>");
 			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
 
 		}else{
-			flagUsuarioHabilitado = 0;
+			//flagUsuarioHabilitado = 0;
 			
 			webpage += ("<p>Usuario incorrecto</p>");
 			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled></form>");
 		}
+	}else{
+
+			//append_page_header();
+			webpage += F("<p>Debe loguearse</p>");
+
 	}
-*/		
+		
+	append_page_footer();
+	server.send(200,"text/html",webpage);
+
+}
+*/
+
+void mostrarLogin(void){
+
+	
+	
+	//append_page_header();
+	chequeoIP();
+	
+	webpage += F("<h2>Login</h2>");
+  	webpage += F("<form action='/login' method='post'><label for='user'><b>Username: </b></label><input type='text' name='user' id='user' value=''><label for='pass'><b>Password: </b></label><input type='text' name='pass' id='pass' value=''><input type='Submit' value='Aceptar'></form>");
+	
+	pathDirectory = "/";//resetea el pathDirectory para realizar una nueva navegación
+	
+
+	if (server.hasArg("user") && server.hasArg("pass")){//si se cambia el login
+		usernameLogin = server.arg(0);//captura el username
+		passwordLogin = server.arg(1);//captura el password
+		webpage += ("<p> Usuario logueado: " + usernameLogin + " Password: " + passwordLogin + "</p>");
+		
+
+		//validación de credenciales de acceso
+		if(usernameLogin == usernameLoginEnabled1 && passwordLogin == passwordLoginEnabled1){
+			//flagUsuarioHabilitado = 1;
+			flagUsuarioLogueado = 1;
+			flagWebserverLibre = 0;//si coinciden las credenciales, el webserver queda en estado Ocupado
+			//clienteActual = client.remoteIP().toString();
+			clienteActual = clienteEntrante;
+			webpage += ("<p>Usuario habilitado</p>");
+			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
+
+		}else{
+			//flagUsuarioHabilitado = 0;
+			
+			webpage += ("<p>Usuario incorrecto</p>");
+			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled></form>");
+		}
+	}else{
+
+			//append_page_header();
+			webpage += F("<p>Debe loguearse</p>");
+
+	}
+		
 	append_page_footer();
 	server.send(200,"text/html",webpage);
 
 }
 
+
 void mostrarLogout(void){
 
-	flagUsuarioHabilitado = 0;
-	flagWebserverLibre = 1;
+	//flagUsuarioHabilitado = 0;
+	//flagWebserverLibre = 1;
 	flagUsuarioLogueado = 0;
+	flagClienteNuevo = 0;
 	usernameLogin = "";
 	passwordLogin = "";
+	clienteActual = "0.0.0.0";
 	
 	append_page_header();
 	
@@ -1488,3 +1748,159 @@ void mostrarLogout(void){
 
 }
 
+void mostrarMenu(void){
+
+	//flagUsuarioHabilitado = 0;
+	//flagWebserverLibre = 1;
+	//flagUsuarioLogueado = 0;
+	//usernameLogin = "";
+	//passwordLogin = "";
+	//clienteActual = "0.0.0.0";
+		
+
+	
+
+	//append_page_header();
+
+
+
+
+
+	
+	
+	//webpage += ("<p>Para usar el sistema debe loguearse</p>");
+  	
+
+
+	if (server.hasArg("user") && server.hasArg("pass")){//si se cambia el login
+		usernameLogin = server.arg(0);//captura el username
+		passwordLogin = server.arg(1);//captura el password
+		//webpage += ("<p> Usuario logueado: " + usernameLogin + " Password: " + passwordLogin + "</p>");
+		
+
+		//validación de credenciales de acceso
+		if(usernameLogin == usernameLoginEnabled1 && passwordLogin == passwordLoginEnabled1){
+			//flagUsuarioHabilitado = 1;
+			flagUsuarioLogueado = 1;
+			Serial.print("MENU -- flagUsuarioLogueado: ");
+			Serial.print(flagUsuarioLogueado);
+			//flagWebserverLibre = 0;//si coinciden las credenciales, el webserver queda en estado Ocupado
+			//clienteActual = client.remoteIP().toString();
+			//chequeoIP();
+			append_page_header();
+			clienteEntrante = server.client().remoteIP().toString();//cuando se conecta un nuevo cliente al HomePage, guarda la IP
+			clienteActual = clienteEntrante;
+			webpage += ("<h2>Menu</h2>");
+			webpage += ("<p>Usuario habilitado</p>");
+			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
+			//webpage += ("<form action='/' method='post'><input type='hidden' name='logout' id='root' value='logout'><input type='Submit' value='Logout'></form>");
+
+		}else{
+			//flagUsuarioHabilitado = 0;
+			flagUsuarioLogueado = 0;
+			usernameLogin = "";//blanqueo de credenciales
+			passwordLogin = "";//blanqueo de credenciales
+			Serial.println("No coinciden las credenciales. Usuario incorrecto");
+			chequeoIP();
+			
+			webpage += ("<h2>Menu</h2>");
+			webpage += ("<p>Usuario incorrecto</p>");
+			//webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled></form>");
+			webpage += ("<form action='/' method='post'><input type='hidden' name='reintentar' id='root' value='reintentar'><input type='Submit' value='Reintentar'></form>");
+			
+		}
+	}else{
+
+			//append_page_header();
+			webpage += F("<p>Debe loguearse</p>");
+
+	}
+
+
+		
+	append_page_footer();
+	server.send(200,"text/html",webpage);
+
+}
+
+void toggleLED10veces(void){
+
+	
+
+	for(int i = 0; i < 10; i++){
+	
+		Serial.println("pin Alto");
+		digitalWrite(pinLED, HIGH);
+		delay(1000);
+		Serial.println("pin Bajo");
+		digitalWrite(pinLED, LOW);
+		delay(1000);
+	
+	}
+	
+
+}
+
+void chequeoIP(void){
+
+
+	
+	clienteEntrante = server.client().remoteIP().toString();//cuando se conecta un nuevo cliente al HomePage, guarda la IP
+	Serial.println("la IP entrante es: ");
+	Serial.println(clienteEntrante);
+
+	//append_page_header();
+
+	if(flagUsuarioLogueado == 0){//si viene del logout, solo debe ofrecer login
+
+		flagClienteNuevo = 1;//solo debe ofrecer login
+		Serial.println("Viene del logout");
+		
+		append_page_header();
+		//webpage += ("<p>Viene del logout. Debe loguearse para navegar</p>");
+		//webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled ></form>");
+
+	
+	
+	
+	
+	
+	}else{//si clienteActual ya tiene una IP, si hay usuarioLogueado
+
+		Serial.print("clienteEntrante: ");
+		Serial.println(clienteEntrante);
+		Serial.print("clienteActual: ");
+		Serial.println(clienteActual);
+
+		//detección de clienteEntrante por primera vez (distinto de 0.0.0.0)
+		if(clienteEntrante != clienteActual && clienteActual != "0.0.0.0"){//Si la IP entrante es distinta de la actual, es un cliente nuevo
+
+			flagClienteNuevo = 1;//no debe ofrece nada, no puede navegar
+			Serial.println("clienteEntrante distinto del actual");
+			Serial.println("NUEVA IP: ");
+			Serial.println(clienteEntrante);
+			
+			append_page_header();
+			webpage += ("<p>clienteEntrante distinto del actual. Debe solicitar el deslogueo o esperar timeout</p>");
+			//webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled ></form>");
+
+		}else{//si es la misma IP
+
+			flagClienteNuevo = 0;//solo debe ofrecer logout 
+			Serial.println("clienteEntrante es igual al actual: ofrece logout y permite navegación");
+			
+			append_page_header();
+			webpage += ("<p>clienteEntrante igual al actual (misma IP)</p>");
+			//webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
+			
+
+		}
+
+
+
+	}
+
+
+
+
+}
