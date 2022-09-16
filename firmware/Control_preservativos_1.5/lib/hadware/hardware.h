@@ -15,9 +15,18 @@
                                                               //Sensor 1 , se guardan pendientes y ordenadas al origen (Se linealiza la curva en 10 segmentos)
                                                               //Sensor 2 , se guardan los valores digitales del AD correspondientes a 1kPa y 2kPa. Aqui solo interesa
                                                               //que el valor se mantenga en este rango durante el ensayo. 
-#define addressEEPROM_1kPa  180  //Guarda el valor del AD para 1kPa en el sensor 2 (Fuelle)
-#define addressEEPROM_2kPa  184  //Guarda el valor del AD para 2kPa en el sensor 2 (Fuelle)
+                                                              //por seguridad se duplica la tabla
+//Se duplica la información de calibración para poder recuperarla si el checksum falla
+#define inicioTabla2 90   //Se duplica la tabla de valores de calibración por si se corrompe la primera, a partir del valor 90                                                              
+#define addressEEPROM_1kPa_1  180  //Guarda el valor del AD para 1kPa en el sensor 2 (Fuelle)
+#define addressEEPROM_2kPa_1  184  //Guarda el valor del AD para 2kPa en el sensor 2 (Fuelle)
+#define addressEEPROM_checksum_1_fuelle 188
+#define addressEEPROM_1kPa_2  192  //Guarda el valor del AD para 1kPa en el sensor 2 (Fuelle)
+#define addressEEPROM_2kPa_2  196  //Guarda el valor del AD para 2kPa en el sensor 2 (Fuelle)
+#define addressEEPROM_checksum_2_fuelle 200
+#define flagIntentoRecalibrar 204  // En "1" si ya intento recomponer calibración, en "0" si no   
 //#define direccionLCD    0x27    //Igual a PCF8574_ADDR_A21_A11_A01
 #define NUMERO_MAQUINA 1
+#define addresspcf8574_KeyPad   0x20    // The PCF8574 is configured to 0x20 I2C address. Check A0, A1 and A2 pins of the device.
 
 #endif

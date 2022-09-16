@@ -27,6 +27,7 @@
       int valorPresionFuelle;
       int checkSum1_sensor1 = 0;
       int checkSum2_sensor1 = 0, checkSum1_sensor2 = 0, checkSum2_sensor2 = 0;
+      int sumaValoresPresionesFuelle = 0;
       boolean inicio = HIGH;
       boolean calibracion;
       boolean cambioSensor = LOW; 
@@ -98,9 +99,11 @@
         checkSum1_sensor1 = m + b;
         //Se guadan las constantes de calibración como enteros (4By c/u)
         EEPROM.writeInt(addressEEPROM, m);       //Escribir en EEPROM m en posición 0
+        EEPROM.writeInt(addressEEPROM + inicioTabla2, m);       //Se duplica la tabla por seguridad       
         EEPROM.commit();
         addressEEPROM += sizeof(m); //update address value
         EEPROM.writeInt(addressEEPROM, b);       //Escribir en EEPROM b en posición 4
+        EEPROM.writeInt(addressEEPROM + inicioTabla2, b);       //Se duplica la tabla por seguridad       
         EEPROM.commit();
         addressEEPROM += sizeof(b); //update address value
   
@@ -110,28 +113,25 @@
         b = int(valorDigitalCalibrado[cont] - m*valorCalibracion[cont]);
   
         EEPROM.writeInt(addressEEPROM, m);       //Escribir en EEPROM m en posicion addressEEPROM
+        EEPROM.writeInt(addressEEPROM + inicioTabla2, m);       //Se duplica la tabla por seguridad       
         EEPROM.commit();
         addressEEPROM += sizeof(m); //update address value
         EEPROM.writeInt(addressEEPROM, b);       //Escribir en EEPROM b en posicion addressEEPROM
+        EEPROM.writeInt(addressEEPROM + inicioTabla2, b);       //Se duplica la tabla por seguridad       
         EEPROM.commit();
         addressEEPROM += sizeof(b); //update address value
         cont ++;
         checkSum1_sensor1 = m + b + checkSum1_sensor1;
- //       checkSum1_sensor1 = 30;
-       }       
+        }       
        
   // ** checksum *****
-     /*   Serial.print("Valor m: ");
-        Serial.println(m);
-        Serial.print("Valor b: ");
-        Serial.println(b);*/
-//        EEPROM.writeInt(72, checkSum1_sensor1);       //Escribir la suma de todos los m y b en posicion addressEEPROM
         Serial.print("Valor checkSum: ");
         EEPROM.writeInt(addressEEPROM, checkSum1_sensor1);       //Escribir la suma de todos los m y b en posicion addressEEPROM
+        EEPROM.writeInt(addressEEPROM + inicioTabla2, checkSum1_sensor1);       //Se duplica la tabla por seguridad       
         EEPROM.commit();
 
      }
-     if(numeroSensor == 2){
+     if(numeroSensor == 2){       //Como no interesa interpolar, solo se guardan los valoras digitales de las dos presiones sin calcular b ni m
         Serial.println("Suba la presión a 1kPa  y presione INICIO");
 //        _imprimirLCDI2C.mensajeLCDcalibracion(1, 1);
         imprimirLcd2.mensajeLCDcalibracion(1, 1);
@@ -141,8 +141,10 @@
           inicio = digitalRead(pulsadorInicio); 
           }
         valorPresionFuelle = analogRead(sensorPresion2);
-        EEPROM.writeInt(addressEEPROM_1kPa, valorPresionFuelle);       //Escribir en EEPROM b en posicion addressEEPROM
+        EEPROM.writeInt(addressEEPROM_1kPa_1, valorPresionFuelle);       //Escribir en EEPROM en posicion addressEEPROM
+        EEPROM.writeInt(addressEEPROM_1kPa_2, valorPresionFuelle);       //(para recuperación por si falla el primero)
         EEPROM.commit();
+        sumaValoresPresionesFuelle = valorPresionFuelle;
         Serial.print("El valor para 1kPa es: ");         
         Serial.println(valorPresionFuelle);
         delay(800);
@@ -154,19 +156,24 @@
           inicio = digitalRead(pulsadorInicio);          
           }
         valorPresionFuelle = analogRead(sensorPresion2);
-        EEPROM.writeInt(addressEEPROM_2kPa, valorPresionFuelle);       //Escribir en EEPROM b en posicion addressEEPROM
+        EEPROM.writeInt(addressEEPROM_2kPa_1, valorPresionFuelle);       //Escribir en EEPROM  en posicion addressEEPROM
+        EEPROM.writeInt(addressEEPROM_2kPa_2, valorPresionFuelle);       //(para recuperación por si falla el primero)
+        sumaValoresPresionesFuelle = valorPresionFuelle + sumaValoresPresionesFuelle;
+        EEPROM.writeInt(addressEEPROM_checksum_1_fuelle, sumaValoresPresionesFuelle);       //Escribir checksum 1 del sensor fuelle
+        EEPROM.writeInt(addressEEPROM_checksum_2_fuelle, sumaValoresPresionesFuelle);       //Escribir checksum 2 del sensor fuelle (para recuperación por si falla el primero)
         EEPROM.commit();
+        
         Serial.print("El valor para 2kPa es: ");         
         Serial.println(valorPresionFuelle);
         delay(800);                   
 //       _imprimirLcd1.imprimirLCDfijo(" Sensor 2          ",0, 2);
        imprimirLcd2.imprimirLCDfijo(" Sensor 2          ",0, 2);
      }
-//     _imprimirLCDI2C.imprimirLCDfijo("                    ",0, 1);
-//     _imprimirLCDI2C.imprimirLCDfijo(" Fin de Calibracion",0, 0);
-//     _imprimirLCDI2C.imprimirLCDfijo("Reinicie el equipo  ",0, 3);
-     imprimirLcd2.imprimirLCDfijo("                    ",0, 1);
-     imprimirLcd2.imprimirLCDfijo(" Fin de Calibracion",0, 0);
-     imprimirLcd2.imprimirLCDfijo("Reinicie el equipo  ",0, 3);
+      EEPROM.writeInt(flagIntentoRecalibrar, 0);       //Se indica en "cero" que no entro en Recupero de calibración
+      EEPROM.commit();
+
+    imprimirLcd2.imprimirLCDfijo("                    ",0, 1);
+    imprimirLcd2.imprimirLCDfijo(" Fin de Calibracion",0, 0);
+    imprimirLcd2.imprimirLCDfijo("Reinicie el equipo  ",0, 3);
 
     }

@@ -37,6 +37,8 @@ RTC_DS3231 rtc;
 #include "DHT.h"
 #include "FS.h"
 #include <EEPROM.h>
+#include "pu2clr_pcf8574.h"
+PCF pcf;
 
 #include <manejadorSD.h>
 #include <tiempoCumplido.h>
@@ -44,24 +46,26 @@ RTC_DS3231 rtc;
 #include "leerEEPROM.h"
 #include "imprimirLCDI2C.h"
 #include "calibrarSensor.h"
+#include "leerCalibracionEEProm.h"
+#include "teclado4x4.h"
 
-tiempoCumplido tiempoCumplido1(100);
-leerEEPROM leerEEPROM1(addressEEPROM_1kPa, addressEEPROM_2kPa);
+tiempoCumplido tiempoCumplido1(100);    //Usado para saber cuando escribir lecturas en la SD
+leerEEPROM leerEEPROM1(addressEEPROM_1kPa_1, addressEEPROM_2kPa_2);
 manejadorSD tarjetaSD1(CS);
 DHT dht(DHTPIN, DHTTYPE);
 LiquidCrystal_I2C lcd1(PCF8574_ADDR_A21_A11_A01, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);  //PCF8574_ADDR_A21_A11_A01 -> dicección I2C del display físico  0X27
 //LiquidCrystal_I2C lcd2(PCF8574_ADDR_A21_A11_A00, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);  //PCF8574_ADDR_A21_A11_A00 -> dicección I2C del display físico 0X26
-
 imprimirLCDI2C imprimirLcd1(lcd1);
-//imprimirLCDI2C imprimirLcd2(lcd1);
-//imprimirLCDI2C imprimirLcd2(lcd2);
 calibrarSensor calibrarSensores1(lcd1);
+leerCalibracionEEProm leerCalibracion1;
+tiempoCumplido tiempoCumplido2(4);    //Usado para llamar a la lectura del teclado
 
+teclado4x4 teclado1(pcf);             //Teclado 4x4 conectado al I2C a travez delPCF8574
 
 //Rutina que crea en archivo de registro de nuevo ensayo, lo nombra según formato ISO8601 y Escribe dentro de el el encabezado del ensayo
 //void calibracionSensoresPresion(void);
 void fallaEscrituraSD(void);
-void leerEEProm(void);
+//void leerEEProm(void);
 
 void setup() {
 
@@ -71,7 +75,9 @@ void setup() {
   pinMode(pulsadorCalibracion, INPUT);
 
   boolean calibracion;
+  int flagCalibracion;
   boolean memoriaSDinicializada = false;
+  boolean datosCalibracionOk;
   //********************************************
   // Open serial communications and wait for port to open:
   Serial.begin(115200);
@@ -79,11 +85,7 @@ void setup() {
     ; // wait for serial port to connect. Needed for native USB port only
   }
   imprimirLcd1.inicializarLCD(20, 4);
-  //imprimirLcd2.inicializarLCD(16, 2);
- 
   imprimirLcd1.imprimirLCDfijo("  INTI CAUCHOS",0, 0);
-  //imprimirLcd2.imprimirLCDfijo("HOLA MUNDO",0, 0);
-
   memoriaSDinicializada = tarjetaSD1.inicializarSD();
     if(!memoriaSDinicializada){
       Serial.println("inicialización fallida!"); 
@@ -113,20 +115,38 @@ void setup() {
    
   imprimirLcd1.imprimirLCDfijo("Pulse INICIO",0, 0);
   imprimirLcd1.imprimirLCDfijo("para comenzar",0, 1);
-  int valor1 = 730;
-  int valor2 = -30;
-  int resultado = valor1 + valor2;
+ 
+  //leerEEProm();
+  flagCalibracion = EEPROM.readInt(flagIntentoRecalibrar);
+  datosCalibracionOk = leerCalibracion1.verificarCalibracion();
 
-    /*EEPROM.writeInt(64, valor1);       //Escribir en EEPROM m en posicion addressEEPROM
-    EEPROM.commit();
-    EEPROM.writeInt(68, valor2);       //Escribir en EEPROM m en posicion addressEEPROM
-    EEPROM.commit();
-    EEPROM.writeInt(72, resultado);       //Escribir en EEPROM m en posicion addressEEPROM
-    EEPROM.commit();
-*/
-  leerEEProm();
+  if(datosCalibracionOk == false){
+    if(flagCalibracion == 0){
+      imprimirLcd1.imprimirLCDfijo("Recomponiendo       ",0, 0);
+      imprimirLcd1.imprimirLCDfijo("calibracion y       ",0, 1);
+      imprimirLcd1.imprimirLCDfijo("reiniciando         ",0, 2);
+      delay(2000);
+      EEPROM.writeInt(flagIntentoRecalibrar, 1);       ////Se indica en "uno" que si entro en Recupero de calibración
+      EEPROM.commit();
+      ESP.restart();  
+    }else{
+      imprimirLcd1.imprimirLCDfijo("No se puede corregir",0, 0);
+      imprimirLcd1.imprimirLCDfijo("calibracion         ",0, 1);
+      imprimirLcd1.imprimirLCDfijo("     CALIBRAR       ",0, 2);
+      while(true){
+        calibracion = digitalRead(pulsadorCalibracion);
+        if(!calibracion)   calibrarSensores1.calibrar();
+        delay(300);
+      }    
+    }     
+  }
+  
+  pcf.setup(addresspcf8574_KeyPad);        
+//  pcf.write(0B11111111);  // Turns all pins/ports HIGH
+
 }
 //********Fin Setup***************************************************************************
+/*
 void leerEEProm(){
   int ultimaLecturaEEPROM = 10;
   int address = 0;
@@ -149,150 +169,12 @@ void leerEEProm(){
   }
     Serial.print("dirección checksum: ");
     Serial.println(address);
-//    checkSum = EEPROM.readInt(address); //Se lee la pendiente guardada durante la calibración
     checkSum = EEPROM.readInt(address); //Se lee la pendiente guardada durante la calibración
     Serial.print("CheckSum: ");
     Serial.println(checkSum);
 
 }
-//******* Calibración ***********************************************************************
-/*void calibracionSensoresPresion(){
-      int numeroSensor = 1;
-      int puntoCalibracion = 0;
-      int valorAcumulado = 0;
-      int promedio;
-      int valorDigitalCalibrado[10];
-      const float valorCalibracion[10] = {0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00, 2.25, 2.50};
-      int m = 0;
-      int b = 0;
-      int muestraPorPunto = 0;
-      int addressEEPROM = 0;
-      int cont = 0;
-      int valorPresionFuelle;
-      int checkSum1_sensor1 = 0, checkSum2_sensor1 = 0, checkSum1_sensor2 = 0, checkSum2_sensor2 = 0;
-      boolean inicio = HIGH;
-      boolean calibracion;
-      boolean cambioSensor = LOW; 
-     
-      imprimirLcd1.mensajeInicialLCDcalibracion(numeroSensor);
-      Serial.println("Con pulsador CALIBRACION seleccione sensor: ");
-      Serial.print("Sensor seleccionado: ");
-      Serial.println(numeroSensor);
-      Serial.println("Pulse INICIO para comenzar calibración"); 
-      delay(600); 
-      while(inicio == HIGH){
-      calibracion = digitalRead(pulsadorCalibracion);
-        if(calibracion == LOW){
-          if(numeroSensor == 1){
-          numeroSensor = 2;
-          }else{
-          numeroSensor = 1;         
-          }
-          delay(600);  
-          cambioSensor = HIGH;      
-        }
-      if(cambioSensor == HIGH){
-        Serial.print("Sensor seleccionado: ");
-        Serial.println(numeroSensor);
-        imprimirLcd1.imprimirLCDfijo(String(numeroSensor),5, 1);    
-        Serial.println("Pulse INICIO para comenzar calibración");    
-        cambioSensor = LOW;       
-      }
-      inicio = digitalRead(pulsadorInicio);
-     }
-     delay(1000);
-     if(numeroSensor == 1){
-       while(puntoCalibracion < 10){
-        while(muestraPorPunto < 3){
-          Serial.print(muestraPorPunto + 1);
-          Serial.print("º. Desde Cero suba la presión hasta ");
-          Serial.print(valorCalibracion[puntoCalibracion]);
-          Serial.println("kPa  y presione INICIO");
-          imprimirLcd1.mensajeLCDcalibracion((muestraPorPunto + 1), valorCalibracion[puntoCalibracion]);
-          inicio = digitalRead(pulsadorInicio);
-          while(inicio == HIGH){
-            inicio = digitalRead(pulsadorInicio);
-            }
-          valorAcumulado = analogRead(sensorPresion1) + valorAcumulado;
-          promedio = valorAcumulado / 3;
-          muestraPorPunto ++;
-          delay(600);
-          }
-        muestraPorPunto = 0;
-        valorDigitalCalibrado[puntoCalibracion] = promedio;
-        valorAcumulado = 0;
-        puntoCalibracion ++;
-       }
-       imprimirLcd1.imprimirLCDfijo(" Sensor 1          ",0, 2); 
-       
-        m = int((valorDigitalCalibrado[1] - valorDigitalCalibrado[0])/0.25);
-  //      m = int((valorDigitalCalibrado[1] - valorDigitalCalibrado[0])/(valorCalibracion[1] - valorCalibracion[0]));
-        b = int(valorDigitalCalibrado[0] - m*valorCalibracion[0]);
-        checkSum1_sensor1 = m + b;
-        //Se guadan las constantes de calibración como enteros (4By c/u)
-        EEPROM.writeInt(addressEEPROM, m);       //Escribir en EEPROM m en posición 0
-        EEPROM.commit();
-        addressEEPROM += sizeof(m); //update address value
-        EEPROM.writeInt(addressEEPROM, b);       //Escribir en EEPROM b en posición 4
-        EEPROM.commit();
-        addressEEPROM += sizeof(b); //update address value
-  
-       while(cont<9){
-  //      m = int((valorDigitalCalibrado[cont+1] - valorDigitalCalibrado[cont])/(valorCalibracion[cont+1] - valorCalibracion[cont]));
-        m = int((valorDigitalCalibrado[cont+1] - valorDigitalCalibrado[cont])/0.25);
-        b = int(valorDigitalCalibrado[cont] - m*valorCalibracion[cont]);
-  
-        EEPROM.writeInt(addressEEPROM, m);       //Escribir en EEPROM m en posicion addressEEPROM
-        EEPROM.commit();
-        addressEEPROM += sizeof(m); //update address value
-        EEPROM.writeInt(addressEEPROM, b);       //Escribir en EEPROM b en posicion addressEEPROM
-        EEPROM.commit();
-        addressEEPROM += sizeof(b); //update address value
-        cont ++;
-        checkSum1_sensor1 = m + b;
-       }       
-  // ** checksum *****
-        EEPROM.writeInt(addressEEPROM, checkSum1_sensor1);       //Escribir la suma de todos los m y b en posicion addressEEPROM
-        EEPROM.commit();
-
-     }
-     if(numeroSensor == 2){
-        Serial.println("Suba la presión a 1kPa  y presione INICIO");
-        imprimirLcd1.mensajeLCDcalibracion(1, 1);
-
-        inicio = HIGH;          
-        while(inicio == HIGH){
-          inicio = digitalRead(pulsadorInicio); 
-          }
-        valorPresionFuelle = analogRead(sensorPresion2);
-        EEPROM.writeInt(addressEEPROM_1kPa, valorPresionFuelle);       //Escribir en EEPROM b en posicion addressEEPROM
-        EEPROM.commit();
-        Serial.print("El valor para 1kPa es: ");         
-        Serial.println(valorPresionFuelle);
-        delay(800);
-        Serial.println("Suba la presión a 2kPa  y presione INICIO");
-        imprimirLcd1.mensajeLCDcalibracion(1, 2);
-        inicio = HIGH;          
-        while(inicio == HIGH){
-          inicio = digitalRead(pulsadorInicio);          
-          }
-        valorPresionFuelle = analogRead(sensorPresion2);
-        EEPROM.writeInt(addressEEPROM_2kPa, valorPresionFuelle);       //Escribir en EEPROM b en posicion addressEEPROM
-        EEPROM.commit();
-        Serial.print("El valor para 2kPa es: ");         
-        Serial.println(valorPresionFuelle);
-        delay(800);                   
-       imprimirLcd1.imprimirLCDfijo(" Sensor 2          ",0, 2);
-     }
-     imprimirLcd1.imprimirLCDfijo("                    ",0, 1);
-     imprimirLcd1.imprimirLCDfijo(" Fin de Calibracion",0, 0);
-     imprimirLcd1.imprimirLCDfijo("Reinicie el equipo  ",0, 3);
-
-     //leerEEPROM();  
-     leerEEPROM1.obtenerValores();
-}*/
-//******************** Fin calibración ************************************************************
-
+*/
 //**************************************************************************************************
 void imprimirPC(DateTime now, float temp, float humed){
       char dateTime[22];
@@ -378,8 +260,8 @@ void rutinaEnsayo(String nombreArchivo){
   nombreMaquina += String(NUMERO_MAQUINA);        //El nombre del archivo corresponde al número de máquina
   nombreMaquina += ".csv";
 
-  valorAD_minimo_fuelle = EEPROM.readInt(addressEEPROM_1kPa); //Valor de presión mínimo (en entero del AD) en el fuelle (sensor de presión 2)   
-  valorAD_maximo_fuelle = EEPROM.readInt(addressEEPROM_2kPa); //Valor de presión máximo (en entero del AD) en el fuelle (sensor de presión 2) 
+  valorAD_minimo_fuelle = EEPROM.readInt(addressEEPROM_1kPa_1); //Valor de presión mínimo (en entero del AD) en el fuelle (sensor de presión 2)   
+  valorAD_maximo_fuelle = EEPROM.readInt(addressEEPROM_2kPa_1); //Valor de presión máximo (en entero del AD) en el fuelle (sensor de presión 2) 
 
   digitalWrite(activarElectrovalvula, HIGH);
   delay(200);
@@ -555,7 +437,7 @@ void leerSerie(){
   String nombreArchivo = "";
   String ano, mes, dia, hora, minutos, segundos;
   String directorio = "";
-  int anoInt, mesInt, diaInt, horaInt, minutosInt, segundosInt;
+  int anoInt, mesInt, diaInt, horaInt, minutosInt, segundosInt, eepromInt;
   char dateTimeChar[22];
         
   comando = Serial.readStringUntil(':');
@@ -594,15 +476,39 @@ void leerSerie(){
       nombreArchivo += Serial.readString();
       tarjetaSD1.leerFile(SD, nombreArchivo.c_str());
   }  
+    if(comando == "eeprom"){    // Escribo en una dirección específica de la eeprom Ej: eeprom:1:23   -> Escribe 23 en la dirección 1
+      int direepromInt;
+      String direeprom = "";
+      direeprom = Serial.readStringUntil(':');
+      direepromInt = direeprom.toInt();
+      nombreArchivo = Serial.readString();
+      eepromInt = nombreArchivo.toInt();
+      EEPROM.writeInt(direepromInt, eepromInt);       //Modifico la direccion 0 de la EEProm para testear como funciona el checksum     
+      EEPROM.commit();
+
+  }  
 }
 //**************************************************************************************  
+char leerTeclado(){
+  int i;
+  char teclaLeida = 'z';
+
+   i = teclado1.obtenerTecla();
+   if(i != 0){
+    Serial.print("\nColumna seleccionada: ");
+    Serial.print(i);
+    delay(100); // Taking a little time to allow you to release the button
+   }
+   return(teclaLeida);
+}
 
 void loop() {
 //  boolean tiempoCumplido;
   boolean calibracion;
 //  String inicio = "";           //Cuando se inicia la placa Impacto envía al inicio de la comunicación "ini")
   String nombreArchivo = "";
-  boolean estadoPulsadorInicio;
+  boolean estadoPulsadorInicio, consultarTeclado;
+  char letraLeida;
 
 
   while (Serial.available() > 0) {    // Es para lectura del puerto serie
@@ -617,5 +523,23 @@ void loop() {
    nombreArchivo = rutinaInicioEnsayo();
    rutinaEnsayo(nombreArchivo);
    }
-       
+
+    consultarTeclado = tiempoCumplido2.calcularTiempo(false);
+  if(consultarTeclado){
+    letraLeida = leerTeclado();
+    consultarTeclado = tiempoCumplido2.calcularTiempo(true);
+  }
+ 
+/*
+ for (uint8_t i = 4; i < 8; i++ ) {
+    pcf.digitalWrite(i-4,LOW );
+    delay(2);
+    if ( pcf.digitalRead(i) == LOW) {
+      Serial.print("\nThe port ");
+      Serial.print(i);
+      Serial.print(" is LOW (button pressed)");
+      delay(100); // Taking a little time to allow you to release the button
+      pcf.write(0B11111111);  // Turns all pins/ports HIGH
+    }
+  } */      
 }
