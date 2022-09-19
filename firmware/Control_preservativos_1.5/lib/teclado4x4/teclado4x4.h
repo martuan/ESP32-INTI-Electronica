@@ -8,9 +8,10 @@ class teclado4x4
 {
     public:
         teclado4x4(PCF pcf1);   //
-        int obtenerTecla();
+        char obtenerTecla(void);
     private:
         PCF _pcf1;
+        char maquinaEstadosTecla(void);
 };
 
 #endif

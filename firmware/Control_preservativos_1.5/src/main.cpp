@@ -493,10 +493,10 @@ char leerTeclado(){
   int i;
   char teclaLeida = 'z';
 
-   i = teclado1.obtenerTecla();
-   if(i != 0){
-    Serial.print("\nColumna seleccionada: ");
-    Serial.print(i);
+   teclaLeida = teclado1.obtenerTecla();
+   if(teclaLeida != 'z'){
+   // Serial.print("\nTecla seleccionada: ");
+   // Serial.print(teclaLeida);
     delay(100); // Taking a little time to allow you to release the button
    }
    return(teclaLeida);
