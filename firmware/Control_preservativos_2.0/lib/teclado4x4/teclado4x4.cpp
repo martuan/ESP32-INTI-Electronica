@@ -47,6 +47,11 @@ char teclado4x4::obtenerTecla(void){
     }*/
 
     letraLeida = this->teclado4x4::maquinaEstadosTecla();
+    if(letraLeida != 'z'){
+ //   Serial.print("Tecla presionada: ");
+ //   Serial.println(letraLeida);
+    }
+
     return(letraLeida);
 }
 //*******************************************************************
@@ -115,8 +120,8 @@ char teclado4x4::maquinaEstadosTecla(void){
         break;
     }
     if(flagTeclaValidada){
-         Serial.print("Tecla presionada: ");
-        Serial.println(tablaTeclado[filasPosicion][columnasPosicion - 4]);
+//         Serial.print("Tecla presionada: ");
+//        Serial.println(tablaTeclado[filasPosicion][columnasPosicion - 4]);
         return(tablaTeclado[filasPosicion][columnasPosicion - 4]);       
     }   
     else return('z');

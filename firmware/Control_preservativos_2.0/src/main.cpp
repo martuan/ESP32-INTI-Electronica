@@ -46,7 +46,7 @@ RTC_DS3231 rtc;
 #include "FS.h"
 #include <EEPROM.h>
 #include "pu2clr_pcf8574.h"
-PCF pcf;
+PCF pcf;      //Maneja el I2C para el teclado 4x4
 
 #include <manejadorSD.h>
 #include <tiempoCumplido.h>
@@ -56,7 +56,10 @@ PCF pcf;
 #include "calibrarSensor.h"
 #include "leerCalibracionEEProm.h"
 #include "teclado4x4.h"
+#include "defines.h"
+//#include "parser.cpp"
 
+  
 
 tiempoCumplido tiempoCumplido1(100);    //Usado para saber cuando escribir lecturas en la SD
 leerEEPROM leerEEPROM1(addressEEPROM_1kPa_1, addressEEPROM_2kPa_2);
@@ -73,15 +76,17 @@ tiempoCumplido tiempoCumplido2(4);    //Usado para llamar a la lectura del tecla
 teclado4x4 teclado1(pcf);             //Teclado 4x4 conectado al I2C a travez delPCF8574
 //leerPuertoSerie 
 //*** Timer
-//volatile int countTimer;    // Trigger 
-//int totalInterrupts;   // counts the number of triggering of the alarm
 hw_timer_t * timer0 = NULL;
 boolean flagEntroTimer = false;
 boolean flagEnsayoEnCurso = false;
-//portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
-//************
+///************
 //Rutina que crea en archivo de registro de nuevo ensayo, lo nombra según formato ISO8601 y Escribe dentro de el el encabezado del ensayo
-//void calibracionSensoresPresion(void);
+//********* Maquna de estados -> menues en display
+extern unsigned char inParser;			// dato de entrada al parser
+extern void Parser(void);
+extern void IniParser(void);
+extern unsigned char estadoActual; 	// estado del parser
+//***************************************************************
 void fallaEscrituraSD(void);
 void IRAM_ATTR onTimer0();
 //****************************************************************************************
@@ -135,35 +140,8 @@ void setup() {
   //**********************************************************************
   dht.begin();    //Inicializar sensor de temperatura
   EEPROM.begin(EEPROM_SIZE);
-   
-  imprimirLcd1.imprimirLCDfijo("Pulse INICIO",0, 0);
-  imprimirLcd1.imprimirLCDfijo("para comenzar",0, 1);
- 
+  
   leerCalibracion1.verificarCalibracion();
-/* //leerEEProm();
- // flagCalibracion = EEPROM.readInt(flagIntentoRecalibrar);
-  //datosCalibracionOk = leerCalibracion1.verificarCalibracion();
- 
-  if(datosCalibracionOk == false){
-    if(flagCalibracion == 0){
-      imprimirLcd1.imprimirLCDfijo("Recomponiendo       ",0, 0);
-      imprimirLcd1.imprimirLCDfijo("calibracion y       ",0, 1);
-      imprimirLcd1.imprimirLCDfijo("reiniciando         ",0, 2);
-      delay(2000);
-      EEPROM.writeInt(flagIntentoRecalibrar, 1);       ////Se indica en "uno" que si entro en Recupero de calibración
-      EEPROM.commit();
-      ESP.restart();  
-    }else{
-      imprimirLcd1.imprimirLCDfijo("No se puede corregir",0, 0);
-      imprimirLcd1.imprimirLCDfijo("calibracion         ",0, 1);
-      imprimirLcd1.imprimirLCDfijo("     CALIBRAR       ",0, 2);
-      while(true){
-        calibracion = digitalRead(pulsadorCalibracion);
-        if(!calibracion)   calibrarSensores1.calibrar();
-        delay(300);
-      }    
-    }     
-  }*/
   
   pcf.setup(addresspcf8574_KeyPad);        
 //  pcf.write(0B11111111);  // Turns all pins/ports HIGH
@@ -173,6 +151,8 @@ void setup() {
                                                   // al timer0 . Activa por flanco.
   timerAlarmWrite(timer0, CUENTA_T0, true); //Carga la cuenta del timer, Autorrecarga.
   timerAlarmEnable(timer0); //Habilita la interrupción del timer.
+
+  IniParser();
 }
 //********Fin Setup***************************************************************************
 
@@ -301,13 +281,9 @@ int finEnsayoSinRuptura(int segundos, String lineaMedicion, String lineaMedicion
 }
 //***********************************************************************************
 boolean rutinaEnsayo(String nombreArchivo){
- // const int timeOut = 30;
-  //if(primerIngresoEnsallo){
   static int segundos = 0;
   static String lineaMedicionAnterior = "";  //Para no guardar en Maquina_1.csv el valor de presión durante loa caída. Interesa guardar la máxima antes del reventado
     
- // }
-
   char medicion[5];
   static String lineaMedicion = "";
   String lineaMedicionNombreArchivo = ""; //Para escribir la última medición en Maquina_1 incluyendo el nombre del archivo
@@ -331,8 +307,6 @@ boolean rutinaEnsayo(String nombreArchivo){
 
   digitalWrite(activarElectrovalvula, HIGH);
   delay(200);
-//  while(segundos < timeOut){
- //   registrarDatos = tiempoCumplido1.calcularTiempo(false);
     lineaMedicion = "";
     if(flagEntroTimer){
         presion1 = obtenerPresion1();            //Se obtiene la presión en el preservativo
@@ -346,8 +320,6 @@ boolean rutinaEnsayo(String nombreArchivo){
         lineaMedicion += "\r\n";
         Serial.print(lineaMedicion);         //Si se quita el envío al puerto serie, agregar delay(10) para que escriba bien en la sd el fin de línea
         datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());   
-//       Serial.print("Dato anexado a SD: ");         //Si se quita el envío al puerto serie, agregar delay(10) para que escriba bien en la sd el fin de línea
-//        Serial.println(datoAnexadoEnSD);         //Si se quita el envío al puerto serie, agregar delay(10) para que escriba bien en la sd el fin de línea
   
         segundos ++;
         imprimirLcd1.imprimirMedicionLCD(String(lineaMedicionLCD), 2);
@@ -358,12 +330,6 @@ boolean rutinaEnsayo(String nombreArchivo){
  //  }
         if(presion1 > 0.1)  { superoPresionMinima = true; }
         if(superoPresionMinima == true){
-      //     presion1 = obtenerPresion1();            //Se obtiene la presión en el preservativo
-              Serial.print("Presion anterior: ");
-            Serial.println(presion1Anterior);
-              Serial.print("Presion actual: ");
-            Serial.println(presion1);
-          
           if(presion1 < (presion1Anterior * 0.6)){       //Si la presión cae un 40% se asume que el preservativo reventó
             Serial.println("Entro a condicional caida 60% ");
       
@@ -398,65 +364,12 @@ boolean rutinaEnsayo(String nombreArchivo){
 
         segundos = finEnsayoSinRuptura(segundos,lineaMedicion, lineaMedicionNombreArchivo, nombreArchivo, nombreMaquina);
     }
- /*  if(segundos == timeOut){
-      lineaMedicionLCD += lineaMedicion;
-      lineaMedicionLCD +=  " Time Out";
-      imprimirLcd1.imprimirMedicionLCD(String(lineaMedicionLCD), 2);
-      lineaMedicion += "Fin de ensayo por Time Out \r\n"; 
-      lineaMedicionNombreArchivo += "Fin de ensayo por Time Out \r\n"; 
-      datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());                 //Escribe última medición antes de reventado en archivo de este ensayo
-      Serial.println("Fin de ensayo por Time Out");
-      datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
-   }     
-   
-   //  delay(200);
-   inicio = digitalRead(pulsadorInicio);
-   if(inicio == LOW){
-  //    lineaMedicionLCD +=  "Fin por Usuario";
-      lineaMedicion += "Fin de ensayo por parada de usuario \r\n"; 
-      lineaMedicionNombreArchivo += "Fin de ensayo por parada de usuario \r\n"; 
-      datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());                 //Escribe última medición antes de reventado en archivo de este ensayo
-      Serial.println("Fin de ensayo por parada de usuario");
-      datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
-      segundos = timeOut + 1;         //Para que salga del While
-      digitalWrite(activarElectrovalvula, LOW);
-      imprimirLcd1.imprimirMedicionLCD("Fin por Usuario", 2);
-      delay(1500);
-   }
 
-    valorAD_fuelle = analogRead(sensorPresion2);
-    if(segundos > 2){                                                             //Para dar tiempo a que suba la presión en el fuelle. La misma electroválvula 
-      if(valorAD_fuelle < valorAD_minimo_fuelle)   bajaPresionFuelle = HIGH;      //infla preservativo y el fuelle de sujeción
-      if(valorAD_fuelle > valorAD_maximo_fuelle)   altaPresionFuelle = HIGH;      
-    }
-
-    if(bajaPresionFuelle == HIGH){
-      lineaMedicion += "Fin de ensayo por baja presión en fuelle \r\n"; 
-      lineaMedicionNombreArchivo += "Fin de ensayo por baja presión en fuelle \r\n"; 
-      datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());                 //Escribe última medición antes de reventado en archivo de este ensayo    
-      Serial.println("Fin de ensayo por baja presión en fuelle");
-      datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
-      segundos = timeOut + 1;       //Para que salga del While
-      imprimirLcd1.imprimirMedicionLCD("Baja Presion Fuelle",2);
-      delay(300);
-    }
-    if(altaPresionFuelle == HIGH){
-      lineaMedicion += "Fin de ensayo por alta presión en fuelle \r\n"; 
-      lineaMedicionNombreArchivo += "Fin de ensayo por alta presión en fuelle \r\n"; 
-      datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());               //Escribe última medición antes de reventado en archivo de este ensayo  
-      Serial.println("Fin de ensayo por alta presión en fuelle");
-      datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());  //Escribe última medición antes de reventado en archivo Maquina_#
-      segundos = timeOut + 1;       //Para que salga del While
-      imprimirLcd1.imprimirMedicionLCD("Alta Presion Fuelle",2);
-      //imprimirLCD("Alta Presion Fuelle",2);
-      delay(300);
-    }*/
     if(!datoAnexadoEnSD){
       segundos = timeOut + 1;       //Para que salga del While  
        Serial.println("Fallo escritura SD ");
     fallaEscrituraSD();
     }
-//  }
   if(segundos >= timeOut){
     digitalWrite(activarElectrovalvula, LOW);
     flagEntroTimer =false;
@@ -596,7 +509,6 @@ char leerTeclado(){
 void loop() {
 //  boolean tiempoCumplido;
   boolean calibracion;
-//  String inicio = "";           //Cuando se inicia la placa Impacto envía al inicio de la comunicación "ini")
   static String nombreArchivo = "";
   boolean estadoPulsadorInicio, consultarTeclado;
   static boolean ensayoEnCurso = false;
@@ -613,7 +525,9 @@ void loop() {
 
   while (Serial.available() > 0) {    // Es para lectura del puerto serie
   leerSerie();
+  
   }
+
   calibracion = digitalRead(pulsadorCalibracion);
  // if(!calibracion)  calibracionSensoresPresion();
    if(!calibracion)   calibrarSensores1.calibrar();
@@ -634,6 +548,13 @@ void loop() {
   if(consultarTeclado){
     letraLeida = leerTeclado();
     consultarTeclado = tiempoCumplido2.calcularTiempo(true);
+    if(letraLeida != 'z'){
+      //inParser = Serial.read();
+      inParser = letraLeida;
+      Parser(); //LLama al parser
+    }
+  } 
+  while( estadoActual & MASKINESTABLE ){
+	  Parser();       //Si el estado actual es inestable, llama al parser.  
   }
- 
 }

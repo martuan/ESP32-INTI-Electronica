@@ -1,13 +1,6 @@
 #ifndef leerCalibracionEEProm_h
 #define leerCalibracionEEProm_h
 
-/*
-#include <Arduino.h>
-#include <hardware.h>
-#include "leerEEPROM.h"
-#include <LiquidCrystal_I2C.h>
-#include "imprimirLCDI2C.h"
-*/
 #include <Arduino.h>
 #include <LiquidCrystal_I2C.h>
 #include "imprimirLCDI2C.h"
