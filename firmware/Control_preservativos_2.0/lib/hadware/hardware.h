@@ -25,6 +25,7 @@
 #define addressEEPROM_2kPa_2  196  //Guarda el valor del AD para 2kPa en el sensor 2 (Fuelle)
 #define addressEEPROM_checksum_2_fuelle 200
 #define flagIntentoRecalibrar 204  // En "1" si ya intento recomponer calibración, en "0" si no   
+#define addressEEPROM_ultimaOT 207  //Este utiliza 7 caracteres
 //#define direccionLCD    0x27    //Igual a PCF8574_ADDR_A21_A11_A01
 #define NUMERO_MAQUINA 1
 #define addresspcf8574_KeyPad   0x20    // The PCF8574 is configured to 0x20 I2C address. Check A0, A1 and A2 pins of the device.

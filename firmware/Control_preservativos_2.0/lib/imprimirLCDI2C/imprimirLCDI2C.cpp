@@ -27,8 +27,8 @@ void imprimirLCDI2C::imprimirMedicionLCD(String lineaMedicionLCD, int fila){    
 //***************************************************************************************
 void imprimirLCDI2C::imprimirLCDfijo(String lineaMedicionLCD, int columna, int fila){
 
-    _objetoLCD.setCursor(0, fila);
-    _objetoLCD.print("                    ");
+ //   _objetoLCD.setCursor(0, fila);
+ //   _objetoLCD.print("                    ");
     _objetoLCD.setCursor(columna, fila);
     _objetoLCD.print(lineaMedicionLCD);      
 }

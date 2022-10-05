@@ -86,6 +86,7 @@ extern unsigned char inParser;			// dato de entrada al parser
 extern void Parser(void);
 extern void IniParser(void);
 extern unsigned char estadoActual; 	// estado del parser
+
 //***************************************************************
 void fallaEscrituraSD(void);
 void IRAM_ATTR onTimer0();
@@ -280,11 +281,16 @@ int finEnsayoSinRuptura(int segundos, String lineaMedicion, String lineaMedicion
     return segundos;
 }
 //***********************************************************************************
-boolean rutinaEnsayo(String nombreArchivo){
+int obtenerVolumenAcumulado(void){
+    int volumen = 5;
+    return(volumen);
+}
+//***********************************************************************************
+boolean rutinaEnsayo(String nombreDirectorioArchivo){
   static int segundos = 0;
   static String lineaMedicionAnterior = "";  //Para no guardar en Maquina_1.csv el valor de presión durante loa caída. Interesa guardar la máxima antes del reventado
     
-  char medicion[5];
+  char medicionPresion[5];
   static String lineaMedicion = "";
   String lineaMedicionNombreArchivo = ""; //Para escribir la última medición en Maquina_1 incluyendo el nombre del archivo
   String escribeUltimaMedicion = "";  //Sirve para registrar la máxima presión alcanzada antes de la ruptura.
@@ -299,11 +305,20 @@ boolean rutinaEnsayo(String nombreArchivo){
   boolean altaPresionFuelle = LOW;
   static  boolean guardarLineaMedicionAnterior = false;   //Sirve para registrar la máxima presión alcanzada antes de la ruptura.
   static boolean superoPresionMinima = false;            //Por debajo de 0.1 kPa tiene mucho error y no se considera la medicion.
-  static String nombreMaquina = "/Maquina_";  
+//  static String nombreMaquina = "/Maquina_";  
   String lineaMedicionLCD = ""; 
   static boolean datoAnexadoEnSD = true;
   boolean ensayoEnCurso = true;
-             
+  int volumenAcumulado;
+
+  static String directorioArchivoOT;
+//  String directorioOT = nombreDirectorioArchivo.substring(0,13);  
+  String archivoOT = nombreDirectorioArchivo.substring(1,12);           
+  directorioArchivoOT = nombreDirectorioArchivo.substring(0,13);
+  directorioArchivoOT += archivoOT;
+  directorioArchivoOT += ".csv";  //Se crea el archivo de registro de la OT con la última medición de cada ensayo. Por cada OT se revientan muchos preservativos
+//  Serial.printf("Archivo OT: ");
+//  Serial.println(directorioArchivoOT);
 
   digitalWrite(activarElectrovalvula, HIGH);
   delay(200);
@@ -312,14 +327,17 @@ boolean rutinaEnsayo(String nombreArchivo){
         presion1 = obtenerPresion1();            //Se obtiene la presión en el preservativo
         presion1PartEntera = int(presion1);      //sprintf no formatea float, entonces separo partes entera y decimal
         presion1Partdecimal = int((presion1 - presion1PartEntera) * 100);
-        sprintf(medicion, "%d.%02d", (int)presion1, presion1Partdecimal);
+        sprintf(medicionPresion, "%d.%02d", (int)presion1, presion1Partdecimal);
+        volumenAcumulado = obtenerVolumenAcumulado();
         lineaMedicion += String(segundos);
         lineaMedicion += ",  ";
-        lineaMedicion += String(medicion);
+        lineaMedicion += String(medicionPresion);
+        lineaMedicion += ",  ";
+        lineaMedicion += String(volumenAcumulado);
         lineaMedicionLCD += lineaMedicion;
         lineaMedicion += "\r\n";
         Serial.print(lineaMedicion);         //Si se quita el envío al puerto serie, agregar delay(10) para que escriba bien en la sd el fin de línea
-        datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), lineaMedicion.c_str());   
+        datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreDirectorioArchivo.c_str(), lineaMedicion.c_str());   
   
         segundos ++;
         imprimirLcd1.imprimirMedicionLCD(String(lineaMedicionLCD), 2);
@@ -333,19 +351,18 @@ boolean rutinaEnsayo(String nombreArchivo){
           if(presion1 < (presion1Anterior * 0.6)){       //Si la presión cae un 40% se asume que el preservativo reventó
             Serial.println("Entro a condicional caida 60% ");
       
-              escribeUltimaMedicion += nombreArchivo;
+              escribeUltimaMedicion += nombreDirectorioArchivo;
               escribeUltimaMedicion += ", ";
               escribeUltimaMedicion += lineaMedicionAnterior;
-              nombreMaquina += String(NUMERO_MAQUINA);        //El nombre del archivo corresponde al número de máquina
-              nombreMaquina += ".csv";
+          //    nombreMaquina += String(NUMERO_MAQUINA);        //El nombre del archivo corresponde al número de máquina
+          //    nombreMaquina += ".csv";
               
-              datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreMaquina.c_str(), escribeUltimaMedicion.c_str());
+              datoAnexadoEnSD = tarjetaSD1.appendFile(SD, directorioArchivoOT.c_str(), escribeUltimaMedicion.c_str());
               superoPresionMinima = false; 
               segundos = timeOut + 1;       //No vuenve a entrar en  while(segundos < timeOut) ni entra en if(segundos == timeOut)
           }    
         }
     
-      
         if(guardarLineaMedicionAnterior == true){   //Sirve para guardar la máxima presión en el preservativo antes del reventado
           presion1Anterior = presion1;
           lineaMedicionAnterior = " ";
@@ -357,12 +374,13 @@ boolean rutinaEnsayo(String nombreArchivo){
         lineaMedicion += ", ";
 
         lineaMedicionNombreArchivo = "";
-        lineaMedicionNombreArchivo += nombreArchivo; 
+        lineaMedicionNombreArchivo += nombreDirectorioArchivo; 
         lineaMedicionNombreArchivo += ", ";
         lineaMedicionNombreArchivo += String(segundos);
         lineaMedicionNombreArchivo += ", ";
 
-        segundos = finEnsayoSinRuptura(segundos,lineaMedicion, lineaMedicionNombreArchivo, nombreArchivo, nombreMaquina);
+        segundos = finEnsayoSinRuptura(segundos,lineaMedicion, lineaMedicionNombreArchivo, nombreDirectorioArchivo, directorioArchivoOT);
+//        segundos = finEnsayoSinRuptura(segundos,lineaMedicion, lineaMedicionNombreArchivo, nombreDirectorioArchivo, nombreMaquina);
     }
 
     if(!datoAnexadoEnSD){
@@ -381,11 +399,17 @@ boolean rutinaEnsayo(String nombreArchivo){
 }
 //********************************************************************************
 String rutinaInicioEnsayo(){
-    String nombreArchivo = "";
+    String nombreDirectorioArchivo = "";
     String cabecera = "";
     String nombreDirectorio = "";
     String tempHumedadLCD = "";
     boolean datoAnexadoEnSD;
+    int cantArchivos = 0;
+    String otActual = "";     
+   
+    otActual = EEPROM.readString(addressEEPROM_ultimaOT);
+      Serial.print("otActual: ");
+      Serial.println(otActual);
     
     float temp = dht.readTemperature(); //Leemos la temperatura en grados Celsius
     float humed = dht.readHumidity(); //Leemos la Humedad
@@ -401,19 +425,20 @@ String rutinaInicioEnsayo(){
     char dateISO[9];
     sprintf(dateISO, "%02d%02d%02d", now.year(), now.month(),now.day()); 
     nombreDirectorio += "/";
-    nombreDirectorio += String(dateISO);
+  //  nombreDirectorio += String(dateISO);
+    nombreDirectorio += otActual.substring(3,14);
     tarjetaSD1.createDir(SD,nombreDirectorio.c_str());
-
     char dateTimeISO[26];
     sprintf(dateTimeISO, "%02d%02d%02dT%02d%02d%02d", now.year(), now.month(),now.day(),  now.hour(), now.minute(), now.second()); 
-    nombreArchivo += nombreDirectorio;
-    nombreArchivo += "/";
-    nombreArchivo += String(dateTimeISO);
-    nombreArchivo += ".csv";
-    tarjetaSD1.writeFile(SD, nombreArchivo.c_str(), "Máquina número:, 01 \r\n");
-    datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), "Fecha  y  hora, Temperatura, Humedad \r\n");
-    imprimirLcd1.imprimirLCDfijo(String(tempHumedadLCD),3, 0);
-    imprimirLcd1.imprimirLCDfijo(String(dateTimeISO),2, 1);
+    nombreDirectorioArchivo += nombreDirectorio;
+    nombreDirectorioArchivo += "/";
+    nombreDirectorioArchivo += String(dateTimeISO);
+    nombreDirectorioArchivo += ".csv";
+    tarjetaSD1.writeFile(SD, nombreDirectorioArchivo.c_str(), "Máquina número:, 01 \r\n");
+    datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreDirectorioArchivo.c_str(), "Fecha  y  hora, Temperatura, Humedad \r\n");
+    cantArchivos = tarjetaSD1.listCantidadArchivos(SD, nombreDirectorio.c_str(), 0);    //Indica en LCD la cantidad de archivos
+    imprimirLcd1.imprimirLCDfijo(String(cantArchivos),16, 0);
+    imprimirLcd1.imprimirLCDfijo(String(dateTimeISO),0, 1);
         
     char dateTime[20];
     sprintf(dateTime, "%02d/%02d/%02d %02d:%02d:%02d", now.year(), now.month(), now.day(),  now.hour(), now.minute(), now.second()); 
@@ -424,12 +449,12 @@ String rutinaInicioEnsayo(){
     cabecera += String(humed);
     cabecera += "\r\n";
     imprimirPC(now, temp, humed);
-    datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreArchivo.c_str(), cabecera.c_str());
-    String str = nombreArchivo.c_str();  
+    datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreDirectorioArchivo.c_str(), cabecera.c_str());
+    String str = nombreDirectorioArchivo.c_str();  
     if(!datoAnexadoEnSD){
       fallaEscrituraSD();
     }
-//    Serial.println("Termino Rutina Inicio Ensayo");
+    Serial.println("Termino Rutina Inicio Ensayo");
   return str; 
 }
 
@@ -467,7 +492,7 @@ void leerSerie(){
 
   }
   if(comando == "leerDir"){
-      tarjetaSD1.listDir(SD, "/", 0);
+      tarjetaSD1.listDir(SD, "/", 0, false);
   }  
  if(comando == "leerSubDir"){
       directorio += "/";
@@ -509,7 +534,7 @@ char leerTeclado(){
 void loop() {
 //  boolean tiempoCumplido;
   boolean calibracion;
-  static String nombreArchivo = "";
+  static String nombreDirectorioArchivo = "";
   boolean estadoPulsadorInicio, consultarTeclado;
   static boolean ensayoEnCurso = false;
   char letraLeida;
@@ -534,11 +559,11 @@ void loop() {
         
    estadoPulsadorInicio = digitalRead(pulsadorInicio);
   if(estadoPulsadorInicio == LOW){
-   nombreArchivo = rutinaInicioEnsayo();
+   nombreDirectorioArchivo = rutinaInicioEnsayo();
    ensayoEnCurso = true;
   }
   if(ensayoEnCurso){
-    ensayoEnCurso = rutinaEnsayo(nombreArchivo);
+    ensayoEnCurso = rutinaEnsayo(nombreDirectorioArchivo);
    //  Serial.print("Ensayo en curso: ");
     //  Serial.println(ensayoEnCurso);
 

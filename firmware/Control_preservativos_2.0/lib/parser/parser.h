@@ -61,6 +61,7 @@ struct estadoParser mPpal[] =
 {
 	'1',M_SELECCION,AMSeleccion,
 	'2',M_EDICION,AMEdicion,
+//	'A',M_EDICION,AMEdicion,
 	DEFAULT,M_PPAL,Nada,
     
 };

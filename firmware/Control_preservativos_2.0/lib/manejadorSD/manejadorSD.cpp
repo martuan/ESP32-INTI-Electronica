@@ -2,6 +2,8 @@
 #include <SD.h>
 #include "manejadorSD.h"
 
+String directorio1; //, directorio2, directorio3, directorio4;
+
     manejadorSD::manejadorSD(int CS1){
        _CS1 = CS1;
     }
@@ -67,9 +69,7 @@ boolean manejadorSD::appendFile(fs::FS &fs, const char * path, const char * mess
 //********************************************************************************
 void manejadorSD::createDir(fs::FS &fs, const char * path){
   boolean directorioExistente ;
-   Serial.println("Crear directorio");
-     Serial.printf("Variable rcibida: %s\n", path);
-       
+
   directorioExistente = SD.exists(path);
   if(directorioExistente){
           Serial.println("Directorio existe");
@@ -83,7 +83,10 @@ void manejadorSD::createDir(fs::FS &fs, const char * path){
   }
 }
 //********************************************************************************
-void manejadorSD::listDir(fs::FS &fs, const char * dirname, uint8_t levels){   //
+void manejadorSD::listDir(fs::FS &fs, const char * dirname, uint8_t levels, boolean listEnArchivo){   //
+  boolean borrarlistadoDirectorio = true;
+  unsigned char i = 0;
+
   Serial.println("");
   Serial.printf("Listado de directorio: %s\n", dirname);
 
@@ -102,8 +105,11 @@ void manejadorSD::listDir(fs::FS &fs, const char * dirname, uint8_t levels){   /
     if(file.isDirectory()){
       Serial.print("  DIR : ");
       Serial.println(file.name());     
+ 
+      directorio1 = String(file.name());
+
       if(levels){
-        listDir(fs, file.name(), levels -1);
+        listDir(fs, file.name(), levels -1, false);
       }
     }else {
       Serial.print("  Archivo: ");
@@ -114,7 +120,14 @@ void manejadorSD::listDir(fs::FS &fs, const char * dirname, uint8_t levels){   /
  //     Serial.println("");
     file = root.openNextFile();
   }
-}
+      if(listEnArchivo){
+        //if(borrarlistadoDirectorio)    
+//        SD.remove("/listadoDirectorio.txt");
+//        this->manejadorSD::listDirLCD(String(file.name()));
+  //      this->manejadorSD::listDirArchivo();
+        //borrarlistadoDirectorio = false;
+      }
+  }
 //*******************************************************************************************************
 void manejadorSD::listSubDir(fs::FS &fs, const char * dirname, uint8_t levels){      //Devuelve el contenido del directorio. Ej.: Enviando "leerSubDir:/20220601" devuelve el contenido dentro del directorio /20220601
   Serial.println("");
@@ -135,10 +148,10 @@ String nombre = "";
   while(file){
     if(file.isDirectory()){
       rutaNombre = file.name();
-      nombre = rutaNombre.substring(9);
+      nombre = rutaNombre;    //.substring(9);
       Serial.println(nombre);
       if(levels){
-        listDir(fs, file.name(), levels -1);
+        listDir(fs, file.name(), levels -1, false);
       }
     }
     file = root.openNextFile();
@@ -162,3 +175,41 @@ void manejadorSD::leerFile(fs::FS &fs, const char * path){
   file.close();
 }
 //******************************************************************************************
+/*String manejadorSD::nombreDirectorio1(void){
+  return(directorio1);
+}*/
+//*******************************************************************************************************
+int manejadorSD::listCantidadArchivos(fs::FS &fs, const char * dirname, uint8_t levels){      //Devuelve el contenido del directorio. Ej.: Enviando "leerSubDir:/20220601" devuelve el contenido dentro del directorio /20220601
+  int cantArchivos = 0;
+  Serial.printf("Listado de directorio: %s\n", dirname);
+
+  File root = fs.open(dirname);
+  if(!root){
+    Serial.println("Failed to open directory");
+    return(0);
+  }
+  if(!root.isDirectory()){
+    Serial.println("Not a directory");
+    return(0);
+  }
+String rutaNombre = "";
+String nombre = "";
+  File file = root.openNextFile();
+  while(file){
+    if(file.isDirectory()){
+      rutaNombre = file.name();
+      nombre = rutaNombre;    //.substring(9);
+      Serial.println(nombre);
+      //cantArchivos++;
+      if(levels){
+        listDir(fs, file.name(), levels -1, false);
+      }
+    }
+    cantArchivos++;
+    file = root.openNextFile();
+  }
+    Serial.printf("Cantidad archivos en SD: ");
+    Serial.println(String(cantArchivos));
+
+  return(cantArchivos);
+}
