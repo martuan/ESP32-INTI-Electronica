@@ -14,7 +14,6 @@ imprimirLCDI2C imprimirLcd3(lcd3);
 
 static boolean crearDirectorio = false;
 static String otActual;
-//static unsigned char otActualChar[20];
 
 //Mensajes del estado Menú Principal.
 unsigned char msgMPpalF1[] = "1- OT ACTUAL        ";
@@ -31,8 +30,8 @@ unsigned char msgMIniciEnsF1[] = "Presione A para     ";
 unsigned char msgMIniciEnsF2[] = "comenzar el ensayo  ";
 //Mensajes del estado Menú Ensayo.
 unsigned char msgMEnsayoF1[] = "OT                  ";
-unsigned char msgMEnsayoF2[] = "Ensayo Nº           ";
-unsigned char msgMEnsayoF3[] = "xxxxxx       xxxxxx ";
+//unsigned char msgMEnsayoF2[] = "Ensayo Nº           ";
+//unsigned char msgMEnsayoF3[] = "xxxxxx       xxxxxx ";
 unsigned char msgMEnsayoF4[] = "B-Suspender         ";
 //Mensajes del estado Menú Suspende Ensayo.
 unsigned char msgMSuspEnsF1[] = "A-Suspende Ensayo   ";
@@ -44,7 +43,7 @@ unsigned char nroOT[CANTDIGITOS+1]; //Array que contiene el nro de OT actual en 
 
 unsigned char lineaVacia[] = "                    ";
 unsigned char msgAaceptar[] = " A - Aceptar        ";
-unsigned char msgBvolver[] = "  B - Volver        ";
+unsigned char msgBvolver[] = " B - Volver         ";
 unsigned char msgINTICaucho[] = "   INTI - CAUCHO  ";
 
 // variables para el parser ------------------------------------------------------
@@ -52,14 +51,13 @@ unsigned char inParser;			// dato de entrada al parser
 unsigned char estadoActual; 	// estado del parser
 unsigned char estadoAnterior;	// utilizado para los casos en que se 
 								// necesita saber de donde viene.
+boolean flagEnsayoEnCurso;
+
 //Variables para edición en el display.
 unsigned char numPosIni;	//Posición inicial del cursor en el campo de edición.
 unsigned char numPosActual; //Posición actual del cursor en el campo de edición.
 unsigned char contadorCaract;
 //String directorio1 = ""; 	
-
-//**************************************************************************
-
 //**************************************************************************
 //
 // Funciones para máquina de estados. (Parser)
@@ -117,8 +115,8 @@ void Nada(void)
 void AMSeleccion(void)
 {
 	String directorio1; 	
-	Serial.println();
-	Serial.println((const char *)msgMSeleccion);
+//	Serial.println();
+//	Serial.println((const char *)msgMSeleccion);
 
 	directorio1 = EEPROM.readString(addressEEPROM_ultimaOT);
 	otActual = directorio1;
@@ -126,16 +124,12 @@ void AMSeleccion(void)
 	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 1);
 	imprimirLcd3.imprimirLCDfijo((const char *) msgAaceptar,0, 2);
 	imprimirLcd3.imprimirLCDfijo((const char *) msgBvolver,0, 3);
-	Serial.print("directorio1: ");
-	Serial.println(directorio1);
-
 }
 void AMInicioEns(void)
 {
-	Serial.println();
-	Serial.println((const char *)msgMIniciEnsF1);
-	Serial.println((const char *)msgMIniciEnsF2);
-//	imprimirEnLCD((const char *)msgMIniciEnsF1,0, 0);
+//	Serial.println();
+//	Serial.println((const char *)msgMIniciEnsF1);
+//	Serial.println((const char *)msgMIniciEnsF2);
 	imprimirLcd3.imprimirLCDfijo((const char *)msgMIniciEnsF1,0, 0);
 	imprimirLcd3.imprimirLCDfijo((const char *)msgMIniciEnsF2,0, 1);
 	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 2);
@@ -187,8 +181,8 @@ void EditaOT (void)
 //	if((inParser != COD_OT_COMUN) && (inParser != COD_INTERLABORATORIO) && (numPosActual < CANTDIGITOS))
 	if((inParser == COD_OT_COMUN) || (inParser == COD_INTERLABORATORIO))
 	{
-		Serial.print("Num pos actual: ");
-		Serial.println(numPosActual);
+//		Serial.print("Num pos actual: ");
+//		Serial.println(numPosActual);
 	if(numPosActual == (CANTDIGITOS -1 )){
 			msgMEdicionF4[numPosActual+numPosIni] = inParser; //Agrega el caracter al mensaje.
 			nroOT[numPosActual] = inParser; //Arma string para usar en el nombre del archivo.
@@ -253,13 +247,13 @@ void AMEnsayo(void)
 	String nombreDirectorio = "/";
 	nombreDirectorio += String((const char *)msgMEdicionF4).substring(3);
 
-	Serial.println();
+//	Serial.println();
+//	Serial.println("Entro a AMEnsayo");
 	Serial.println((const char *)msgMEnsayoF1);
 	Serial.println((const char *)msgMEnsayoF4);
-//	imprimirLcd3.imprimirLCDfijo(String((const char *)msgMEdicionF4),0, 0);
 	imprimirLcd3.imprimirLCDfijo(otActual,0, 0);
 	imprimirLcd3.imprimirLCDfijo(String((const char *)msgMEnsayoF4),0, 1);
-
+	flagEnsayoEnCurso = true;
 }
 
 void AMSuspEns(void)
@@ -270,7 +264,9 @@ void AMSuspEns(void)
 	imprimirLcd3.imprimirLCDfijo("A-Cancela Ensayo    ",0, 0);
 	imprimirLcd3.imprimirLCDfijo("B-Continua Ensayo   ",0, 1);
 	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 2);
-	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 3);}
+	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 3);
+	flagEnsayoEnCurso = false;
+}
 
 void AVerifNroOT (void)
 {

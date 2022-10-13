@@ -33,7 +33,6 @@ class parser1   {
 
   };    
 
-    
 	void Parser(void);
     void IniParser(void);
     void Nada(void);
