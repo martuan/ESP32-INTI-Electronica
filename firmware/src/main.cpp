@@ -1,7 +1,7 @@
 /*  
  *
  *	Programado por: Martín Cioffi y Nestor Mariño
- *  Fecha: 30-08-2022
+ *  Fecha: 18-10-2022
  *
  *	Version 1
  *  
@@ -62,7 +62,8 @@
 #else
 	#include <WiFi.h>              // Built-in
 	#include <WiFiMulti.h>         // Built-in
-	#include <ESP32WebServer.h>    // https://github.com/Pedroalbuquerque/ESP32WebServer download and place in your Libraries folder
+	//#include <ESP32WebServer.h>    // https://github.com/Pedroalbuquerque/ESP32WebServer download and place in your Libraries folder
+	#include <ESPAsyncWebServer.h>
 	#include <ESPmDNS.h>
 	#include <AsyncTCP.h>
 	#include "SPIFFS.h"
@@ -91,7 +92,8 @@ RTC_DS3231 rtc;
   ESP8266WebServer server(80);
 #else
   WiFiMulti wifiMulti;
-  ESP32WebServer server(80);
+  //ESP32WebServer server(80);
+  AsyncWebServer server(80);
 #endif
 
 #include "Network.h"
@@ -99,24 +101,15 @@ RTC_DS3231 rtc;
 #include "CSS.h"
 
 // ********** Funciones del webserver ***************
-void HomePage();
-void File_Download();
-void SD_file_download(String filename);
-void handleFileUpload();
-void listar_SD_dir();
+//void File_Download();
+void SD_file_download(String filename, AsyncWebServerRequest *);
+void listar_SD_dir(String, String, AsyncWebServerRequest *);
 void printDirectory_v5(SdFile root);
-void mostrarLogin(void);
-void mostrarLogout(void);
-void File_Stream();
 void File_Delete();
 void SD_file_delete(String filename);
-void SendHTML_Header();
-void SendHTML_Content();
-void SendHTML_Stop();
 void SelectInput(String heading1, String command, String arg_calling_name);
 String file_size(int bytes);
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels);
-void File_Upload();
 void ReportCouldNotCreateFile(String target);
 void ReportFileNotPresent(String target);
 void ReportSDNotPresent();
@@ -126,8 +119,8 @@ void ConsultarPorFecha();
 void agregaFilaEnTabla(String nombreDeArchivo, String fechaNormalizada, String rutaDeArchivo);
 String obtenerFechaDeArchivo(void);
 void toggleLED10veces(void);
-void chequeoIP(void);
-void mostrarMenu(void);
+void armarPaqueteHtml(String);
+void reconnectWifi(void);
 
 // ********** Funciones del controlador ***************
 
@@ -160,11 +153,233 @@ void leerSerie(void);
 String rutinaInicioEnsayo(void);
 void rutinaEnsayo(String nombreArchivo);
 
+// HTML web page to handle 3 input fields (input1, input2, input3)
+const char index_html[] PROGMEM = R"rawliteral(
+
+<!DOCTYPE HTML><html>
+<head>
+
+	<meta name='viewport' content='user-scalable=yes,initial-scale=1.0,width=device-width'>
+	<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css'>
+	<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css' integrity='sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm' crossorigin='anonymous'>
+		
+	<style>
+	body{max-width:65%;margin:0 auto;font-family:arial;font-size:105%;text-align:center;color:blue;background-color:#F7F2Fd;}
+	ul{list-style-type:none;margin:0.1em;padding:0;border-radius:0.375em;overflow:hidden;background-color:#dcade6;font-size:1em;}
+	li{float:left;border-radius:0.375em;border-right:0.06em solid #bbb;}last-child {border-right:none;font-size:85%}
+	li a{display: block;border-radius:0.375em;padding:0.44em 0.44em;text-decoration:none;font-size:85%}
+	li a:hover{background-color:#EAE3EA;border-radius:0.375em;font-size:85%}
+	section {font-size:0.88em;}
+	h1{color:white;border-radius:0.5em;font-size:1em;padding:0.2em 0.2em;background:#558ED5;}
+	h2{color:orange;font-size:1.0em;}
+	h3{font-size:0.8em;}
+	table{font-family:arial,sans-serif;font-size:0.9em;border-collapse:collapse;width:85%;} 
+	th,td {border:0.06em solid #dddddd;text-align:center;padding:0.3em;border-bottom:0.06em solid #dddddd;} 
+	tr:nth-child(odd) {background-color:#eeeeee;}
+	.rcorners_n {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:20%;color:white;font-size:75%;}
+	.rcorners_m {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:50%;color:white;font-size:75%;}
+	.rcorners_w {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:70%;color:white;font-size:75%;}
+	.column{float:left;width:50%;height:45%;}
+	.row:after{content:'';display:table;clear:both;}
+	*{box-sizing:border-box;}
+	footer{background-color:#eedfff; text-align:center;padding:0.3em 0.3em;border-radius:0.375em;font-size:60%;}
+	button{border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:20%;color:white;font-size:130%;}
+	.buttons {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:15%;color:white;font-size:80%;}
+	.buttonsm{border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:9%; color:white;font-size:70%;}
+	.buttonm {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:15%;color:white;font-size:70%;}
+	.buttonw {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:40%;color:white;font-size:70%;}
+	.btn {background-color: DodgerBlue;border: none;color: white;padding: 12px 30px;cursor: pointer;font-size: 20px;}
+	.btn:hover {background-color: RoyalBlue;}
+	a{font-size:75%;}
+	p{font-size:75%;}
+	</style>
+</head>
+
+
+<title>INTI - Caucho</title>
+<body><table><tr><td><h1>ESP32 Datalogger Webserver - INTI</h1></td>
+
+<form action='/login' method='post'>
+<label for='user'><b>Usuario: </b></label><input type='text' name='user' id='user' value=''>
+<label for='pass'><b>Password: </b></label><input type='password' name='pass' id='pass' value=''>
+<input type='Submit' value='Aceptar'>
+</form>
+</body></html>
+)rawliteral";
+
+const char menu_html[] PROGMEM = R"rawliteral(
+
+<!DOCTYPE HTML><html>
+<head>
+
+	<meta name='viewport' content='user-scalable=yes,initial-scale=1.0,width=device-width'>
+	<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css'>
+	<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css' integrity='sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm' crossorigin='anonymous'>
+		
+	<style>
+	body{max-width:65%;margin:0 auto;font-family:arial;font-size:105%;text-align:center;color:blue;background-color:#F7F2Fd;}
+	ul{list-style-type:none;margin:0.1em;padding:0;border-radius:0.375em;overflow:hidden;background-color:#dcade6;font-size:1em;}
+	li{float:left;border-radius:0.375em;border-right:0.06em solid #bbb;}last-child {border-right:none;font-size:85%}
+	li a{display: block;border-radius:0.375em;padding:0.44em 0.44em;text-decoration:none;font-size:85%}
+	li a:hover{background-color:#EAE3EA;border-radius:0.375em;font-size:85%}
+	section {font-size:0.88em;}
+	h1{color:white;border-radius:0.5em;font-size:1em;padding:0.2em 0.2em;background:#558ED5;}
+	h2{color:orange;font-size:1.0em;}
+	h3{font-size:0.8em;}
+	table{font-family:arial,sans-serif;font-size:0.9em;border-collapse:collapse;width:85%;} 
+	th,td {border:0.06em solid #dddddd;text-align:center;padding:0.3em;border-bottom:0.06em solid #dddddd;} 
+	tr:nth-child(odd) {background-color:#eeeeee;}
+	.rcorners_n {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:20%;color:white;font-size:75%;}
+	.rcorners_m {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:50%;color:white;font-size:75%;}
+	.rcorners_w {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:70%;color:white;font-size:75%;}
+	.column{float:left;width:50%;height:45%;}
+	.row:after{content:'';display:table;clear:both;}
+	*{box-sizing:border-box;}
+	footer{background-color:#eedfff; text-align:center;padding:0.3em 0.3em;border-radius:0.375em;font-size:60%;}
+	button{border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:20%;color:white;font-size:130%;}
+	.buttons {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:15%;color:white;font-size:80%;}
+	.buttonsm{border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:9%; color:white;font-size:70%;}
+	.buttonm {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:15%;color:white;font-size:70%;}
+	.buttonw {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:40%;color:white;font-size:70%;}
+	.btn {background-color: DodgerBlue;border: none;color: white;padding: 12px 30px;cursor: pointer;font-size: 20px;}
+	.btn:hover {background-color: RoyalBlue;}
+	a{font-size:75%;}
+	p{font-size:75%;}
+	</style>
+</head>
+
+
+<title>INTI - Caucho</title>
+<body><table><tr><td><h1>Menu</h1></td></tr></table>
+
+<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>
+<br>
+<form action='/logout' method='post'><input type='hidden' name='logout' id='logout' value='/'><input type='Submit' value='Logout'></form>
+
+
+</body></html>
+)rawliteral";
+
+const char listSD_start_html[] PROGMEM = R"rawliteral(
+
+<!DOCTYPE HTML><html>
+<head>
+
+	<meta name='viewport' content='user-scalable=yes,initial-scale=1.0,width=device-width'>
+	<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css'>
+	<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css' integrity='sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm' crossorigin='anonymous'>
+		
+	<style>
+	body{max-width:65%;margin:0 auto;font-family:arial;font-size:105%;text-align:center;color:blue;background-color:#F7F2Fd;}
+	ul{list-style-type:none;margin:0.1em;padding:0;border-radius:0.375em;overflow:hidden;background-color:#dcade6;font-size:1em;}
+	li{float:left;border-radius:0.375em;border-right:0.06em solid #bbb;}last-child {border-right:none;font-size:85%}
+	li a{display: block;border-radius:0.375em;padding:0.44em 0.44em;text-decoration:none;font-size:85%}
+	li a:hover{background-color:#EAE3EA;border-radius:0.375em;font-size:85%}
+	section {font-size:0.88em;}
+	h1{color:white;border-radius:0.5em;font-size:1em;padding:0.2em 0.2em;background:#558ED5;}
+	h2{color:orange;font-size:1.0em;}
+	h3{font-size:0.8em;}
+	table{font-family:arial,sans-serif;font-size:0.9em;border-collapse:collapse;width:85%;} 
+	th,td {border:0.06em solid #dddddd;text-align:center;padding:0.3em;border-bottom:0.06em solid #dddddd;} 
+	tr:nth-child(odd) {background-color:#eeeeee;}
+	.rcorners_n {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:20%;color:white;font-size:75%;}
+	.rcorners_m {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:50%;color:white;font-size:75%;}
+	.rcorners_w {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:70%;color:white;font-size:75%;}
+	.column{float:left;width:50%;height:45%;}
+	.row:after{content:'';display:table;clear:both;}
+	*{box-sizing:border-box;}
+	footer{background-color:#eedfff; text-align:center;padding:0.3em 0.3em;border-radius:0.375em;font-size:60%;}
+	button{border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:20%;color:white;font-size:130%;}
+	.buttons {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:15%;color:white;font-size:80%;}
+	.buttonsm{border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:9%; color:white;font-size:70%;}
+	.buttonm {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:15%;color:white;font-size:70%;}
+	.buttonw {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:40%;color:white;font-size:70%;}
+	.btn {background-color: DodgerBlue;border: none;color: white;padding: 12px 30px;cursor: pointer;font-size: 20px;}
+	.btn:hover {background-color: RoyalBlue;}
+	a{font-size:75%;}
+	p{font-size:75%;}
+	</style>
+</head>
+
+
+<title>INTI - Caucho</title>
+<body><table><tr><td><h1>DIR</h1></td></tr></table>
+
+
+<form action='/menu' method='post'><input type='hidden' name='directorio' id='root' value='menu'><input type='Submit' value='Volver al menu'></form>
+<br>
+<form action='/logout' method='post'><input type='hidden' name='logout' id='logout' value='/'><input type='Submit' value='Logout'></form>
+
+
+
+
+)rawliteral";
+
+
+
+const char listSD_end_html[] PROGMEM = R"rawliteral(
+
+	</body></html>
+)rawliteral";
+
+const char html_root[] PROGMEM = R"rawliteral(
+	
+	<!DOCTYPE html><html>
+	<head>
+	<title>ESP32 Datalogger Webserver - INTI</title> // NOTE: 1em = 16px
+	<meta name='viewport' content='user-scalable=yes,initial-scale=1.0,width=device-width'>
+	<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css'>
+	<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css' integrity='sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm' crossorigin='anonymous'>
+		
+	<style>
+	body{max-width:65%;margin:0 auto;font-family:arial;font-size:105%;text-align:center;color:blue;background-color:#F7F2Fd;}
+	ul{list-style-type:none;margin:0.1em;padding:0;border-radius:0.375em;overflow:hidden;background-color:#dcade6;font-size:1em;}
+	li{float:left;border-radius:0.375em;border-right:0.06em solid #bbb;}last-child {border-right:none;font-size:85%}
+	li a{display: block;border-radius:0.375em;padding:0.44em 0.44em;text-decoration:none;font-size:85%}
+	li a:hover{background-color:#EAE3EA;border-radius:0.375em;font-size:85%}
+	section {font-size:0.88em;}
+	h1{color:white;border-radius:0.5em;font-size:1em;padding:0.2em 0.2em;background:#558ED5;}
+	h2{color:orange;font-size:1.0em;}
+	h3{font-size:0.8em;}
+	table{font-family:arial,sans-serif;font-size:0.9em;border-collapse:collapse;width:85%;} 
+	th,td {border:0.06em solid #dddddd;text-align:center;padding:0.3em;border-bottom:0.06em solid #dddddd;} 
+	tr:nth-child(odd) {background-color:#eeeeee;}
+	.rcorners_n {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:20%;color:white;font-size:75%;}
+	.rcorners_m {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:50%;color:white;font-size:75%;}
+	.rcorners_w {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:70%;color:white;font-size:75%;}
+	.column{float:left;width:50%;height:45%;}
+	.row:after{content:'';display:table;clear:both;}
+	*{box-sizing:border-box;}
+	footer{background-color:#eedfff; text-align:center;padding:0.3em 0.3em;border-radius:0.375em;font-size:60%;}
+	button{border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:20%;color:white;font-size:130%;}
+	.buttons {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:15%;color:white;font-size:80%;}
+	.buttonsm{border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:9%; color:white;font-size:70%;}
+	.buttonm {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:15%;color:white;font-size:70%;}
+	.buttonw {border-radius:0.5em;background:#558ED5;padding:0.3em 0.3em;width:40%;color:white;font-size:70%;}
+	.btn {background-color: DodgerBlue;border: none;color: white;padding: 12px 30px;cursor: pointer;font-size: 20px;}
+	.btn:hover {background-color: RoyalBlue;}
+
+
+	a{font-size:75%;}
+	p{font-size:75%;}
+	</style></head><body><table><tr><td><h1>ESP32 Datalogger Webserver - INTI</h1></td></tr></table></body></html>
+)rawliteral";
+
+void notFound(AsyncWebServerRequest *request) {
+  request->send(404, "text/plain", "Not found");
+}
+
+
+
+
+
 char estadoPin = 0;
 bool flagCheckArgs = 0;
 String ultimoDirExplorado = {};
 
 int pinLED = 15;
+
+int cuentaIntentos = 0;
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void setup(void){
@@ -205,26 +420,8 @@ void setup(void){
 		Serial.println("Dirección IP: ");
 		Serial.println(WiFi.localIP());
 		
-		//delay(5000);
-		
-		
 	}
-	/*
-	//************************CONFIG MULTIWIFI***************************************
 
-		if (!WiFi.config(local_IP, gateway, subnet, dns)) { //WiFi.config(ip, gateway, subnet, dns1, dns2);
-			Serial.println("WiFi STATION Failed to configure Correctly"); 
-		} 
-		wifiMulti.addAP(ssid_1, password_1);  // add Wi-Fi networks you want to connect to, it connects strongest to weakest
-		wifiMulti.addAP(ssid_2, password_2);  // Adjust the values in the Network tab
-		wifiMulti.addAP(ssid_3, password_3);
-		wifiMulti.addAP(ssid_4, password_4);  // You don't need 4 entries, this is for example!
-		
-		Serial.println("Connecting ...");
-		while (wifiMulti.run() != WL_CONNECTED) { // Wait for the Wi-Fi to connect: scan for Wi-Fi networks, and connect to the strongest of the networks above
-			delay(250); Serial.print('.');
-		}
-	*/
 	Serial.println("\nConnected to "+WiFi.SSID()+" Use IP address: "+WiFi.localIP().toString()); // Report which SSID and IP is in use
 	// The logical name http://fileserver.local will also access the device if you have 'Bonjour' running or your system supports multicast dns
 	if (!MDNS.begin(servername)) {          // Set your preferred server name, if you use "myserver" the address would be http://myserver.local/
@@ -242,9 +439,7 @@ void setup(void){
 	Serial.print(F("Initializing SD card...")); 
 
 	SD.begin(SD_CS_pin);//prueba
-	//if (!SD.begin(SD_CS_pin)) { // see if the card is present and can be initialised. Wemos SD-Card CS uses D8 
-	//if (!SD.begin(SD_CS_pin, SPI, 20000000 )) { // see if the card is present and can be initialised. Wemos SD-Card CS uses D8 
-	//if (!SD.begin(SD_CS_pin, SPI, 80000000, "/sd", (uint8_t)5, false )) { // see if the card is present and can be initialised. Wemos SD-Card CS uses D8 
+	
 	if (!sd.begin(SD_CS_pin, SD_SCK_MHZ(20))) { // see if the card is present and can be initialised. Wemos SD-Card CS uses D8 
 		Serial.println(F("Card failed or not present, no SD Card data logging possible..."));
 		SD_present = false; 
@@ -259,21 +454,148 @@ void setup(void){
 	//----------------------------------------------------------------------   
 	///////////////////////////// Server Commands 
 
-	server.on("/", HomePage);
-	server.on("/download", File_Download);
-	//server.on("/upload",   File_Upload);
-	//server.on("/fupload",  HTTP_POST,[](){ server.send(200);}, handleFileUpload);
-	//server.on("/stream",   File_Stream);
-	server.on("/delete",   File_Delete);
-	server.on("/dir",      listar_SD_dir);
-	server.on("/consultarPorFecha", ConsultarPorFecha);
-	server.on("/login", mostrarLogin);
-	server.on("/logout", mostrarLogout);
-	server.on("/menu", mostrarMenu);
+
+// Send web page with input fields to client
+
+	server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+	  cuentaIntentos++;
+	if (logueado == 0) { //ofrece loguin
+		request->send_P(200, "text/html", index_html);
+	}else{ //hay otro usuario logueado
+		String htmlToSend = "Servidor web ocupado...Intento Nº"+String(cuentaIntentos)+"<br><a href=\"/\">Retornar a pantalla inicio</a>";
+		//String htmlToSend = "Servidor web ocupado...Intento Nº<br><a href=\"/\">Retornar a pantalla inicio</a>";
+		//request->send_P(200, "text/html","Servidor web ocupado...Intento Nº"+String(cuentaIntentos)+"<br><a href=\"/\">Retornar a pantalla inicio</a>");
+		request->send_P(200, "text/html", htmlToSend.c_str());
+	}
+  });
+
+  server.on("/login", HTTP_POST, [] (AsyncWebServerRequest *request) {
+    String inputUsuario;
+    String inputPass;
+
+	Serial.println("cantidad de parametros = ");
+	Serial.println(request->params());
+
+    inputUsuario = request->getParam(0)->value();
+    inputPass = request->getParam(1)->value();
+
+    Serial.print("Usuario: ");    
+    Serial.println(inputUsuario);
+    Serial.print("Clave: ");    
+    Serial.println(inputPass);
+    
+    if(inputUsuario == userEnabled1 && inputPass == passEnabled1){
+      
+      logueado = 1;
+      Serial.println(logueado);
+
+	  request->redirect("/menu");
+
+    }else{
+      Serial.println(logueado);
+
+      request->send(200, "text/html", "<p>HTTP POST enviado - credenciales no validas</p>" 
+                                        "<br><a href=\"/\">Retornar a pantalla inicio</a>");
+    }
+
+  });
+  
+  server.on("/menu", HTTP_ANY, [] (AsyncWebServerRequest *request) {
+    
+    Serial.print("Entrando al menu MENU....");    
+    Serial.println(logueado);
+
+    request->send(200, "text/html", menu_html);
+  });
+  
+  server.on("/dir", HTTP_POST, [] (AsyncWebServerRequest *request) {
+    
+    Serial.print("Entrando al menu DIR....");    
+    Serial.println(logueado);
+    cuentaDIR += 1;
+    Serial.println(cuentaDIR);
+
+	String param1;
+    String param2;
+
+	//request->send(200, "text/html", menu_html);
+	//request->hasArg()
+
+	listar_SD_dir(param1, param2, request);
+
+//**************** contenido de listar_SD_dir ******************
+//**************************************************************
+
+
+	Serial.println("cantidad de parametros = ");
+	Serial.println(request->params());
+	param1 = request->getParam(0)->value();
+    //param2 = request->getParam(0)->value();
+	Serial.println(param1);
+
+	cuentaIntentos++;
+  });
+
+  server.on("/logout", HTTP_ANY, [] (AsyncWebServerRequest *request) {
+    String inputUsuario;
+    String inputPass;
+
+    logueado = 0;
+    cuentaDIR = 0;
+    Serial.println(logueado);
+    
+    request->redirect("/");
+
+  });
+
+  server.on("/muestraIP", HTTP_ANY, [] (AsyncWebServerRequest *request) {
+
+    Serial.print("Solicitud HTTP desde IP: ");    
+    //Serial.println(inputIP);
+    Serial.println(request->client()->remoteIP());
+    Serial.println(logueado);
+    //logueado = 0;
+    request->send(200, "text/html", "Solicitud HTTP desde IP: "
+                        + (request->client()->remoteIP()).toString() +
+                        "<br><a href=\"/\">Retornar a Menu Principal</a>"
+                        "<br><a href=\"/logout\">Desconectarse de la Web</a>");
+
+  });
+
+
+ 
+  server.on("/download", HTTP_ANY, [] (AsyncWebServerRequest *request) {
+
+    Serial.print("Solicitud HTTP desde IP: ");    
+    //Serial.println(inputIP);
+    Serial.println(request->client()->remoteIP());
+    Serial.println(logueado);
+
+
+
+	if (request->hasArg("download")){
+		Serial.print("argumento = ");
+		Serial.println(request->getParam(0)->value());
+		SD_file_download(request->getParam(0)->value(), request);
+
+	} 
+	//request->send(SPIFFS, "/file.html", "text/html", true);
+
+/*
+    //logueado = 0;
+    request->send(200, "text/html", "Solicitud HTTP desde IP: "
+                        + (request->client()->remoteIP()).toString() +
+                        "<br><a href=\"/\">Retornar a Menu Principal</a>"
+                       "<br><a href=\"/logout\">Desconectarse de la Web</a>");
+*/
+  });
+  
+ 
+  server.onNotFound(notFound);
+  server.begin();
 
   ///////////////////////////// End of Request commands
-  	server.begin();
-	//client = server.client();
+
   	Serial.println("HTTP server started");
 
 
@@ -335,38 +657,16 @@ void setup(void){
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void loop(void){
-	server.handleClient(); // Listen for client connections
+
+
+
+	if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("WiFi desconectado..");
+	  reconnectWifi();
+    }
+
 	
 	/*
-	Serial.print("cuenta: ");
-	Serial.println(cuenta);
-	cuenta++;
-	delay(3000);
-	*/
-	//server.addHandler();
-/*
-	//  boolean tiempoCumplido;
-	boolean calibracion;
-	//  String inicio = "";           //Cuando se inicia la placa Impacto envía al inicio de la comunicación "ini")
-	String nombreArchivo = "";
-	boolean estadoPulsadorInicio;
-
-
-	while (Serial.available() > 0) {    // Es para lectura del puerto serie
-		leerSerie();
-	}
-	calibracion = digitalRead(pulsadorCalibracion);
-	if(!calibracion)  calibracionSensoresPresion();
-        
-	estadoPulsadorInicio = digitalRead(pulsadorInicio);
-	
-	if(estadoPulsadorInicio == LOW){
-		nombreArchivo = rutinaInicioEnsayo();
-   		rutinaEnsayo(nombreArchivo);
-   }
-  */     
-
-	
 	boolean estadoPulsadorInicio;
 
 	estadoPulsadorInicio = digitalRead(21);
@@ -380,242 +680,16 @@ void loop(void){
 		Serial.println("SI se puede acceder a la memoria SD desde el webserver");
 	
 	}
-
+*/
 
 }
 
 // All supporting functions from here...
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-void HomePage(){
-
-	//SendHTML_Header();
 /*
-	if (server.hasArg("user") && server.hasArg("pass")){//si se cambia el login
-		usernameLogin = server.arg(0);//captura el username
-		passwordLogin = server.arg(1);//captura el password
-		
-		//validación de credenciales de acceso
-		if(usernameLogin == usernameLoginEnabled1 && passwordLogin == passwordLoginEnabled1){
-			//flagUsuarioHabilitado = 1;
-			flagUsuarioLogueado = 1;
-			//flagWebserverLibre = 0;//si coinciden las credenciales, el webserver queda en estado Ocupado
-			
-
-		}else{
-
-			//flagUsuarioHabilitado = 0;
-			flagUsuarioLogueado = 0;
-			
-		}
-*/
-
-	//client = server.client();
-
-	//chequeoIP();
-	
-
-
-/*
-
-	//clienteEntrante = client.remoteIP().toString();//cuando se conecta un nuevo cliente al HomePage, guarda la IP
-	clienteEntrante = server.client().remoteIP().toString();//cuando se conecta un nuevo cliente al HomePage, guarda la IP
-	Serial.println("la IP entrante es: ");
-	Serial.println(clienteEntrante);
-
-	if(flagUsuarioLogueado == 0){//si viene del logout, solo debe ofrecer login
-
-		flagClienteNuevo = 1;//solo debe ofrecer login
-		Serial.println("Viene del logout");
-		
-		append_page_header();
-		webpage += ("<p>Viene del logout. Debe loguearse para navegar</p>");
-		webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled ></form>");
-
-	
-	
-	
-	
-	
-	}else{//si clienteActual ya tiene una IP, si hay usuarioLogueado
-
-	Serial.print("clienteEntrante: ");
-	Serial.println(clienteEntrante);
-	Serial.print("clienteActual: ");
-	Serial.println(clienteActual);
-
-		//detección de clienteEntrante por primera vez (distinto de 0.0.0.0)
-		if(clienteEntrante != clienteActual){//Si la IP entrante es distinta de la actual, es un cliente nuevo
-
-			flagClienteNuevo = 1;//no debe ofrece nada, no puede navegar
-			Serial.println("clienteEntrante distinto del actual");
-			Serial.println("NUEVA IP: ");
-			Serial.println(clienteEntrante);
-			
-			append_page_header();
-			webpage += ("<p>clienteEntrante distinto del actual. Debe solicitar el deslogueo o esperar timeout</p>");
-			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled ></form>");
-
-		}else{//si es la misma IP
-
-			flagClienteNuevo = 0;//solo debe ofrecer logout 
-			Serial.println("clienteEntrante es igual al actual: ofrece logout y permite navegación");
-			
-			append_page_header();
-			webpage += ("<p>clienteEntrante igual al actual (misma IP)</p>");
-			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
-			
-
-		}
-
-
-
-	}
-*/
-
-	//append_page_header();
-
-	if (server.hasArg("logout") || server.hasArg("reintentar")){//si se desloguea
-
-		Serial.print("Llegó argumento Logout");
-		flagUsuarioLogueado = 0;
-		flagClienteNuevo = 0;
-		usernameLogin = "";
-	
-	}
-
-	Serial.print("HOME -- flagUsuarioLogueado: ");
-	Serial.println(flagUsuarioLogueado);
-
-	
-
-	if(flagUsuarioLogueado == 1){//si ya hay un usuario logueado no muestra el login
-
-		Serial.println("Ya existe un usuario logueado");
-		chequeoIP();
-
-	}else{//si no hay usuario logueado, muestra el login
-		
-		Serial.println("No existe un usuario logueado");
-		append_page_header();
-		webpage += F("<h2>Login</h2>");
-  		webpage += F("<form action='/menu' method='post'><label for='user'><b>Username: </b></label><input type='text' name='user' id='user' value=''><label for='pass'><b>Password: </b></label><input type='text' name='pass' id='pass' value=''><input type='Submit' value='Login'></form>");
-
-	}
-	
-	
-	pathDirectory = "/";//resetea el pathDirectory para realizar una nueva navegación
-	
-
-	
-
-
-
-	append_page_footer();
-	SendHTML_Content();
-	SendHTML_Stop(); // Stop is needed because no content length was sent
-/*
-	
-
-	
-
-	//client = server.client();
-	//cliente = client.remoteIP().toString();
-
-	//if(cliente)
-	//Serial.println(cliente);
-	//Serial.println(client.remoteIP());
-	
-	
-
-	
-	if(flagUsuarioLogueado == 0){
-
-		if (server.hasArg("user") && server.hasArg("pass")){//si se cambia el login
-		usernameLogin = server.arg(0);//captura el username
-		passwordLogin = server.arg(1);//captura el password
-		
-		//webpage += ("<p> Usuario logueado: " + usernameLogin + " Password: " + passwordLogin + "</p>");
-		
-
-			//validación de credenciales de acceso
-			if(usernameLogin == usernameLoginEnabled1 && passwordLogin == passwordLoginEnabled1){
-				//flagUsuarioHabilitado = 1;
-				flagUsuarioLogueado = 1;
-				//flagWebserverLibre = 0;//si coinciden las credenciales, el webserver queda en estado Ocupado
-				append_page_header();
-				webpage += ("<p>Usuario habilitado</p>");
-				webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
-
-			}else{
-
-				//flagUsuarioHabilitado = 0;
-				flagUsuarioLogueado = 0;
-				append_page_header();
-				webpage += ("<p>Usuario incorrecto</p>");
-				webpage += F("<p>Debe loguearse</p>");
-				webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled></form>");
-			}
-		}else{
-
-			append_page_header();
-			webpage += F("<p>Debe loguearse</p>");
-		}
-
-	}else{//si ya existe un usuario logueado
-
-		append_page_header();
-		webpage += F("<p>Ya existe un usuario logueado</p>");
-
-
-	}
-	
-
-	
-
-*/
-
-  
-	fechaEnsayoConsultada = "";
-	/*
-	if(flagUsuarioLogueado == 0){//si no hay usario habilitado, debe loguearse
-	//if(flagUsuarioHabilitado == 0){//si no hay usario habilitado, debe loguearse
-
-		webpage += F("<p>Debe loguearse</p>");	
-
-
-	}else{//si ya está logueado
-
-		webpage += F("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
-
-	}
-*/
-//   if(flagWebserverLibre){//si nadie está usando el webserver, no hay nadie logueado
-
-// 	//if(flagUsuarioHabilitado){//si está logueado con un usuario habilitado
-
-// 		webpage += F("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
-// /*
-// 	}else{
-		
-// 		webpage += F("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled></form>");	  
-// 		webpage += F("<p>Debe estar logueado para acceder</p>");	  
-	
-// 	}
-// */
-//   }else{
-
-// 	  webpage += F("<p>Ya hay un usuario en el webserver</p>");	  
-
-//   }
-  //webpage += F("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
-
-  
-}
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void File_Download(){ // This gets called twice, the first pass selects the input, the second pass then processes the command line arguments
-  
-	flagWebserverLibre = 0;//se ocupa el webserver
+
+//	flagWebserverLibre = 0;//se ocupa el webserver
 
 	if (server.args() > 0 ) { // Arguments were received
 		if (server.hasArg("download")){
@@ -626,10 +700,12 @@ void File_Download(){ // This gets called twice, the first pass selects the inpu
 	}
 	else SelectInput("Enter filename to download","download","download");
 
-  	flagWebserverLibre = 1;//se libera el webserver
+//  	flagWebserverLibre = 1;//se libera el webserver
+
 }
+*/
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-void SD_file_download(String filename){
+void SD_file_download(String filename, AsyncWebServerRequest *request){
 
   if (SD_present) { 
 
@@ -648,98 +724,53 @@ void SD_file_download(String filename){
 		Serial.println("Se descarga el archivo");
 		Serial.println();
 		
+		request->send(download2, filename.c_str(), "text/html", true);
+		/*
 		server.sendHeader("Content-Type", "text/text");
 		server.sendHeader("Content-Disposition", "attachment; filename="+filename);
 		server.sendHeader("Connection", "close");
 		server.streamFile(download2, "application/octet-stream");
+		*/
 		download.close();
 		download2.close();
     }else ReportFileNotPresent("download"); 
   }else ReportSDNotPresent();
+
 }
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-void File_Upload(){
-  Serial.println("File upload stage-1");
-  append_page_header();
-  webpage += F("<h3>Select File to Upload</h3>"); 
-  webpage += F("<FORM action='/fupload' method='post' enctype='multipart/form-data'>");
-  webpage += F("<input class='buttons' style='width:40%' type='file' name='fupload' id = 'fupload' value=''><br>");
-  webpage += F("<br><button class='buttons' style='width:10%' type='submit'>Upload File</button><br>");
-  webpage += F("<a href='/'>[Back]</a><br><br>");
-  append_page_footer();
-  Serial.println("File upload stage-2");
-  server.send(200, "text/html",webpage);
-}
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-File UploadFile; 
-void handleFileUpload(){ // upload a new file to the Filing system
-  Serial.println("File upload stage-3");
-  HTTPUpload& uploadfile = server.upload(); // See https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WebServer/srcv
-                                            // For further information on 'status' structure, there are other reasons such as a failed transfer that could be used
-  if(uploadfile.status == UPLOAD_FILE_START)
-  {
-    Serial.println("File upload stage-4");
-    String filename = uploadfile.filename;
-    if(!filename.startsWith("/")) filename = "/"+filename;
-    Serial.print("Upload File Name: "); Serial.println(filename);
-    SD.remove(filename);                         // Remove a previous version, otherwise data is appended the file again
-    UploadFile = SD.open(filename, FILE_WRITE);  // Open the file for writing in SPIFFS (create it, if doesn't exist)
-    filename = String();
-  }
-  else if (uploadfile.status == UPLOAD_FILE_WRITE)
-  {
-    Serial.println("File upload stage-5");
-    if(UploadFile) UploadFile.write(uploadfile.buf, uploadfile.currentSize); // Write the received bytes to the file
-  } 
-  else if (uploadfile.status == UPLOAD_FILE_END)
-  {
-    if(UploadFile)          // If the file was successfully created
-    {                                    
-      UploadFile.close();   // Close the file again
-      Serial.print("Upload Size: "); Serial.println(uploadfile.totalSize);
-      webpage = "";
-      append_page_header();
-      webpage += F("<h3>File was successfully uploaded</h3>"); 
-      webpage += F("<h2>Uploaded File Name: "); webpage += uploadfile.filename+"</h2>";
-      webpage += F("<h2>File Size: "); webpage += file_size(uploadfile.totalSize) + "</h2><br>"; 
-      append_page_footer();
-      server.send(200,"text/html",webpage);
-    } 
-    else
-    {
-      ReportCouldNotCreateFile("upload");
-    }
-  }
-}
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-void listar_SD_dir(){
 
-	append_page_header();
+void listar_SD_dir(String param1, String param2, AsyncWebServerRequest *request){
 
-	//flagWebserverLibre = 0;//se ocupa el webserver
-	//if(flagUsuarioHabilitado){
-	if(flagUsuarioLogueado){
 
+	Serial.println("cantidad de parametros = ");
+	Serial.println(request->params());
+	param1 = request->getParam(0)->value();
+
+	Serial.println(param1);
+
+
+	if(logueado){
+		Serial.println("usuario logueado");
 		 if (SD_present) {
 			 
-			 //chequeoIP() 
+
     
-			if(server.arg(0) == ROOTDIR){
+			if(param1 == ROOTDIR){
 
 				root.open(ROOTDIR);
 
 			}else{
+				
+				String directorio = param1;
+				
 
-				String directorio = server.arg(0);
-
-				if (server.hasArg("directorio")){//si se pide avanzar adelante (un directorio nuevo)
+				if (request->hasArg("directorio")){//si se pide avanzar adelante (un directorio nuevo)
 					
 					pathDirectory = pathDirectory + directorio + "/" ;
 					Serial.print("pathDirectory = ");
 					Serial.println(pathDirectory);
 					
-				}else if(server.hasArg("directorioAtras")){//si se pide avanzar atrás (el directorio padre)
+				}else if(request->hasArg("directorioAtras")){//si se pide avanzar atrás (el directorio padre)
 
 					if(pathDirectory != ROOTDIR){
 						
@@ -760,43 +791,37 @@ void listar_SD_dir(){
 
 
 			if (root) {
-			root.rewindDirectory();
-			//chequeoIP();
-			//SendHTML_Header();
-			webpage += F("<h3 class='rcorners_m'>Contenido de la memoria SD</h3><br>");
-			webpage += F("<form action='/consultarPorFecha'><label for='Fecha'>Fecha: </label><input type='date' id='fechaEnsayo' name='fechaEnsayo'><input type='submit'></form><br>");
+				root.rewindDirectory();
 
-			webpage += "<h3 align = 'left'>Directorio actual = "+ pathDirectory + "</h3>";
+				webpage += F("<h3 class='rcorners_m'>Contenido de la memoria SD</h3><br>");
+				webpage += F("<form action='/consultarPorFecha'><label for='Fecha'>Fecha: </label><input type='date' id='fechaEnsayo' name='fechaEnsayo'><input type='submit'></form><br>");
 
-			webpage += F("<table class='table table-striped'>");
-			webpage += F("<tr><th scope='col'>Nombre</th><th scope='col'>Fecha</th><th scope='col'>Archivo/Directorio</th><th scope='col'>Tama&ntildeo</th><th scope='col'>Eliminar</th><th scope='col'>Descargar</th></tr>");
-			webpage += "<tr><td><form action='/dir' method='post'><input type='hidden' name='directorioAtras' id='directorioAtras' value='../'><input type='Submit' value='../'></form></td><td></td><td></td><td></td><td align='center'></td><td></td></tr>";
+				webpage += "<h3 align = 'left'>Directorio actual = "+ pathDirectory + "</h3>";
 
-			printDirectory_v5(root);
+				webpage += F("<table class='table table-striped'>");
+				webpage += F("<tr><th scope='col'>Nombre</th><th scope='col'>Fecha</th><th scope='col'>Archivo/Directorio</th><th scope='col'>Tama&ntildeo</th><th scope='col'>Eliminar</th><th scope='col'>Descargar</th></tr>");
+				webpage += "<tr><td><form action='/dir' method='post'><input type='hidden' name='directorioAtras' id='directorioAtras' value='../'><input type='Submit' value='../'></form></td><td></td><td></td><td></td><td align='center'></td><td></td></tr>";
 
-			webpage += F("</table>");
-			fechaEnsayoConsultada = "";
-			SendHTML_Content();
-			root.close();
+				printDirectory_v5(root);
+
+				webpage += F("</table>");
+				fechaEnsayoConsultada = "";
+				
+				String prueba = webpage;
+				
+				armarPaqueteHtml(prueba);
+
+				request->send(200, "text/html", paquete_html.c_str());
+
+				root.close();
 			}
-			else 
-			{
-			//chequeoIP();	
-			//SendHTML_Header();
-			webpage += F("<h3>No Files Found</h3>");
+			else{
+				webpage += F("<h3>No Files Found</h3>");
 			}
-			append_page_footer();
-			SendHTML_Content();
-			SendHTML_Stop();   // Stop is needed because no content length was sent
+
 		} else ReportSDNotPresent();
 
-
-
 	}
-
- 	//flagWebserverLibre = 1;//se libera el webserver
-  
-
 }
 
 void printDirectory_v5(SdFile path){
@@ -813,11 +838,11 @@ void printDirectory_v5(SdFile path){
 
 	while(entry.openNext(&path, O_RDONLY)){
 
-		
+		/*
 		if (webpage.length() > 1000) {
 			SendHTML_Content();
 		}
-
+*/
 		entry.getName(entryName, 100);//obtiene el nombre de la entrada, ya sea un directorio o un archivo
 		
 		if(entry.isDirectory()){//Si es un directorio
@@ -860,29 +885,7 @@ void printDirectory_v5(SdFile path){
 		entry.close();
 	}
 }
-
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-void File_Stream(){
-  if (server.args() > 0 ) { // Arguments were received
-    if (server.hasArg("stream")) SD_file_stream(server.arg(0));
-  }
-  else SelectInput("Enter a File to Stream","stream","stream");
-}
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-void SD_file_stream(String filename) { 
-  if (SD_present) { 
-    File dataFile = SD.open("/"+filename, FILE_READ); // Now read data from SD Card 
-    Serial.print("Streaming file: "); Serial.println(filename);
-    if (dataFile) { 
-      if (dataFile.available()) { // If data is available and present 
-        String dataType = "application/octet-stream"; 
-        if (server.streamFile(dataFile, dataType) != dataFile.size()) {Serial.print(F("Sent less data than expected!")); } 
-      }
-      dataFile.close(); // close the file: 
-    } else ReportFileNotPresent("Cstream");
-  } else ReportSDNotPresent(); 
-}   
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/*
 void File_Delete(){
 
 	flagWebserverLibre = 0;//se ocupa el webserver
@@ -894,8 +897,9 @@ void File_Delete(){
 
 	flagWebserverLibre = 1;//se libera el webserver
 }
-
+*/
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/*
 void SD_file_delete(String filename) { // Delete the file 
   if (SD_present) { 
     SendHTML_Header();
@@ -919,64 +923,47 @@ void SD_file_delete(String filename) { // Delete the file
     SendHTML_Stop();
   } else ReportSDNotPresent();
 } 
+*/
+
+
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-void SendHTML_Header(){
-  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate"); 
-  server.sendHeader("Pragma", "no-cache"); 
-  server.sendHeader("Expires", "-1"); 
-  server.setContentLength(CONTENT_LENGTH_UNKNOWN); 
-  server.send(200, "text/html", ""); // Empty content inhibits Content-length header so we have to close the socket ourselves. 
-  append_page_header();
-  server.sendContent(webpage);
-  webpage = "";
-}
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-void SendHTML_Content(){
-  server.sendContent(webpage);
-  webpage = "";
-}
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-void SendHTML_Stop(){
-  server.sendContent("");
-  server.client().stop(); // Stop is needed because no content length was sent
-}
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 void SelectInput(String heading1, String command, String arg_calling_name){
-  SendHTML_Header();
+  //SendHTML_Header();
   webpage += F("<h3>"); webpage += heading1 + "</h3>"; 
   webpage += F("<FORM action='/"); webpage += command + "' method='post'>"; // Must match the calling argument e.g. '/chart' calls '/chart' after selection but with arguments!
   webpage += F("<input type='text' name='"); webpage += arg_calling_name; webpage += F("' value=''><br>");
   webpage += F("<type='submit' name='"); webpage += arg_calling_name; webpage += F("' value=''><br><br>");
-  append_page_footer();
-  SendHTML_Content();
-  SendHTML_Stop();
+  //append_page_footer();
+  //SendHTML_Content();
+  //SendHTML_Stop();
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void ReportSDNotPresent(){
-  SendHTML_Header();
+  //SendHTML_Header();
   webpage += F("<h3>No SD Card present</h3>"); 
   webpage += F("<a href='/'>[Back]</a><br><br>");
-  append_page_footer();
-  SendHTML_Content();
-  SendHTML_Stop();
+  //append_page_footer();
+  //SendHTML_Content();
+  //SendHTML_Stop();
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void ReportFileNotPresent(String target){
-  SendHTML_Header();
+  //SendHTML_Header();
   webpage += F("<h3>File does not exist</h3>"); 
   webpage += F("<a href='/"); webpage += target + "'>[Back]</a><br><br>";
-  append_page_footer();
-  SendHTML_Content();
-  SendHTML_Stop();
+  //append_page_footer();
+  //SendHTML_Content();
+  //SendHTML_Stop();
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void ReportCouldNotCreateFile(String target){
-  SendHTML_Header();
+  //SendHTML_Header();
   webpage += F("<h3>Could Not Create Uploaded File (write-protected?)</h3>"); 
   webpage += F("<a href='/"); webpage += target + "'>[Back]</a><br><br>";
-  append_page_footer();
-  SendHTML_Content();
-  SendHTML_Stop();
+  //append_page_footer();
+  //SendHTML_Content();
+  //SendHTML_Stop();
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 String file_size(int bytes){
@@ -1029,7 +1016,7 @@ void initSPIFFS() {
 }
 
 void ConsultarPorFecha(void){
-
+/*
 	fechaEnsayoConsultada = "";//borra la anterior consulta
 	pathDirectory = "";//resetea la ruta
 
@@ -1058,7 +1045,7 @@ void ConsultarPorFecha(void){
 	append_page_footer();
 	SendHTML_Content();
 	SendHTML_Stop();
-
+*/
 }
 
 
@@ -1629,200 +1616,6 @@ String obtenerFechaDeArchivo(void){
 
 }
 
-/*
-void mostrarLogin(void){
-
-	
-	
-	//append_page_header();
-	chequeoIP();
-	
-	webpage += F("<h2>Login</h2>");
-  	webpage += F("<form action='/login' method='post'><label for='user'><b>Username: </b></label><input type='text' name='user' id='user' value=''><label for='pass'><b>Password: </b></label><input type='text' name='pass' id='pass' value=''><input type='Submit' value='Aceptar'></form>");
-	
-	pathDirectory = "/";//resetea el pathDirectory para realizar una nueva navegación
-	
-
-	if (server.hasArg("user") && server.hasArg("pass")){//si se cambia el login
-		usernameLogin = server.arg(0);//captura el username
-		passwordLogin = server.arg(1);//captura el password
-		webpage += ("<p> Usuario logueado: " + usernameLogin + " Password: " + passwordLogin + "</p>");
-		
-
-		//validación de credenciales de acceso
-		if(usernameLogin == usernameLoginEnabled1 && passwordLogin == passwordLoginEnabled1){
-			//flagUsuarioHabilitado = 1;
-			flagUsuarioLogueado = 1;
-			flagWebserverLibre = 0;//si coinciden las credenciales, el webserver queda en estado Ocupado
-			//clienteActual = client.remoteIP().toString();
-			clienteActual = clienteEntrante;
-			webpage += ("<p>Usuario habilitado</p>");
-			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
-
-		}else{
-			//flagUsuarioHabilitado = 0;
-			
-			webpage += ("<p>Usuario incorrecto</p>");
-			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled></form>");
-		}
-	}else{
-
-			//append_page_header();
-			webpage += F("<p>Debe loguearse</p>");
-
-	}
-		
-	append_page_footer();
-	server.send(200,"text/html",webpage);
-
-}
-*/
-
-void mostrarLogin(void){
-
-	
-	
-	//append_page_header();
-	chequeoIP();
-	
-	webpage += F("<h2>Login</h2>");
-  	webpage += F("<form action='/login' method='post'><label for='user'><b>Username: </b></label><input type='text' name='user' id='user' value=''><label for='pass'><b>Password: </b></label><input type='text' name='pass' id='pass' value=''><input type='Submit' value='Aceptar'></form>");
-	
-	pathDirectory = "/";//resetea el pathDirectory para realizar una nueva navegación
-	
-
-	if (server.hasArg("user") && server.hasArg("pass")){//si se cambia el login
-		usernameLogin = server.arg(0);//captura el username
-		passwordLogin = server.arg(1);//captura el password
-		webpage += ("<p> Usuario logueado: " + usernameLogin + " Password: " + passwordLogin + "</p>");
-		
-
-		//validación de credenciales de acceso
-		if(usernameLogin == usernameLoginEnabled1 && passwordLogin == passwordLoginEnabled1){
-			//flagUsuarioHabilitado = 1;
-			flagUsuarioLogueado = 1;
-			flagWebserverLibre = 0;//si coinciden las credenciales, el webserver queda en estado Ocupado
-			//clienteActual = client.remoteIP().toString();
-			clienteActual = clienteEntrante;
-			webpage += ("<p>Usuario habilitado</p>");
-			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
-
-		}else{
-			//flagUsuarioHabilitado = 0;
-			
-			webpage += ("<p>Usuario incorrecto</p>");
-			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled></form>");
-		}
-	}else{
-
-			//append_page_header();
-			webpage += F("<p>Debe loguearse</p>");
-
-	}
-		
-	append_page_footer();
-	server.send(200,"text/html",webpage);
-
-}
-
-
-void mostrarLogout(void){
-
-	//flagUsuarioHabilitado = 0;
-	//flagWebserverLibre = 1;
-	flagUsuarioLogueado = 0;
-	flagClienteNuevo = 0;
-	usernameLogin = "";
-	passwordLogin = "";
-	clienteActual = "0.0.0.0";
-	
-	append_page_header();
-	
-	webpage += ("<h2>Logout (usuario deslogueago)</h2>");
-	webpage += ("<p>Para usar el sistema debe loguearse</p>");
-  	
-
-		
-	append_page_footer();
-	server.send(200,"text/html",webpage);
-
-}
-
-void mostrarMenu(void){
-
-	//flagUsuarioHabilitado = 0;
-	//flagWebserverLibre = 1;
-	//flagUsuarioLogueado = 0;
-	//usernameLogin = "";
-	//passwordLogin = "";
-	//clienteActual = "0.0.0.0";
-		
-
-	
-
-	//append_page_header();
-
-
-
-
-
-	
-	
-	//webpage += ("<p>Para usar el sistema debe loguearse</p>");
-  	
-
-
-	if (server.hasArg("user") && server.hasArg("pass")){//si se cambia el login
-		usernameLogin = server.arg(0);//captura el username
-		passwordLogin = server.arg(1);//captura el password
-		//webpage += ("<p> Usuario logueado: " + usernameLogin + " Password: " + passwordLogin + "</p>");
-		
-
-		//validación de credenciales de acceso
-		if(usernameLogin == usernameLoginEnabled1 && passwordLogin == passwordLoginEnabled1){
-			//flagUsuarioHabilitado = 1;
-			flagUsuarioLogueado = 1;
-			Serial.print("MENU -- flagUsuarioLogueado: ");
-			Serial.print(flagUsuarioLogueado);
-			//flagWebserverLibre = 0;//si coinciden las credenciales, el webserver queda en estado Ocupado
-			//clienteActual = client.remoteIP().toString();
-			//chequeoIP();
-			append_page_header();
-			clienteEntrante = server.client().remoteIP().toString();//cuando se conecta un nuevo cliente al HomePage, guarda la IP
-			clienteActual = clienteEntrante;
-			webpage += ("<h2>Menu</h2>");
-			webpage += ("<p>Usuario habilitado</p>");
-			webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
-			//webpage += ("<form action='/' method='post'><input type='hidden' name='logout' id='root' value='logout'><input type='Submit' value='Logout'></form>");
-
-		}else{
-			//flagUsuarioHabilitado = 0;
-			flagUsuarioLogueado = 0;
-			usernameLogin = "";//blanqueo de credenciales
-			passwordLogin = "";//blanqueo de credenciales
-			Serial.println("No coinciden las credenciales. Usuario incorrecto");
-			chequeoIP();
-			
-			webpage += ("<h2>Menu</h2>");
-			webpage += ("<p>Usuario incorrecto</p>");
-			//webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled></form>");
-			webpage += ("<form action='/' method='post'><input type='hidden' name='reintentar' id='root' value='reintentar'><input type='Submit' value='Reintentar'></form>");
-			
-		}
-	}else{
-
-			//append_page_header();
-			webpage += F("<p>Debe loguearse</p>");
-
-	}
-
-
-		
-	append_page_footer();
-	server.send(200,"text/html",webpage);
-
-}
-
 void toggleLED10veces(void){
 
 	
@@ -1841,66 +1634,71 @@ void toggleLED10veces(void){
 
 }
 
-void chequeoIP(void){
+void armarPaqueteHtml(String strRecibido){
 
 
+	//paquete_html = "<html><body>hola "
+	//paquete_html = "hola" +  strRecibido + "</body>\
+	//</html>";
+	//paquete_html = "ass\
+	//<!DOCTYPE html><html><body>\
+	//pepe" + strRecibido + "</body></html>";
+
+/*
+	paquete_html = header_html + 
+	"<table><tr><td><h1>ESP32 Datalogger Webserver - INTI</h1></td><td>" + strRecibido + "</td></tr></table>" + 
 	
-	clienteEntrante = server.client().remoteIP().toString();//cuando se conecta un nuevo cliente al HomePage, guarda la IP
-	Serial.println("la IP entrante es: ");
-	Serial.println(clienteEntrante);
 
-	//append_page_header();
 
-	if(flagUsuarioLogueado == 0){//si viene del logout, solo debe ofrecer login
+	"<h3 class='rcorners_m'>Contenido de la memoria SD</h3><br>"
+	"<form action='/consultarPorFecha'><label for='Fecha'>Fecha: </label><input type='date' id='fechaEnsayo' name='fechaEnsayo'><input type='submit'></form><br>"
+	"<h3 align = 'left'>Directorio actual = "+ pathDirectory + "</h3>"
+	"<table class='table table-striped'>"
+	"<tr><th scope='col'>Nombre</th><th scope='col'>Fecha</th><th scope='col'>Archivo/Directorio</th><th scope='col'>Tama&ntildeo</th><th scope='col'>Eliminar</th><th scope='col'>Descargar</th></tr>"
+	"<tr><td><form action='/dir' method='post'><input type='hidden' name='directorioAtras' id='directorioAtras' value='../'><input type='Submit' value='../'></form></td><td></td><td></td><td></td><td align='center'></td><td></td></tr></table>" +
+	ending_html;
+*/
 
-		flagClienteNuevo = 1;//solo debe ofrecer login
-		Serial.println("Viene del logout");
-		
-		append_page_header();
-		//webpage += ("<p>Viene del logout. Debe loguearse para navegar</p>");
-		//webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled ></form>");
+	paquete_html = header_html + 
 
+	strRecibido +
 	
+	ending_html;
+
+	webpage = "";//limpia el string
+
+
+}
+
+void reconnectWifi(void){
+	cuenta = 0;
+
+	Serial.println("Intentando reconectar");
+
+	WiFi.begin(ssid_1, password_1);
+
+	while ((WiFi.status() != WL_CONNECTED) && cuenta < 20) {//límite de 20 intentos de 500 ms
+		delay(500);
+		Serial.print(".");
+		cuenta++;
 	
-	
-	
-	
-	}else{//si clienteActual ya tiene una IP, si hay usuarioLogueado
-
-		Serial.print("clienteEntrante: ");
-		Serial.println(clienteEntrante);
-		Serial.print("clienteActual: ");
-		Serial.println(clienteActual);
-
-		//detección de clienteEntrante por primera vez (distinto de 0.0.0.0)
-		if(clienteEntrante != clienteActual && clienteActual != "0.0.0.0"){//Si la IP entrante es distinta de la actual, es un cliente nuevo
-
-			flagClienteNuevo = 1;//no debe ofrece nada, no puede navegar
-			Serial.println("clienteEntrante distinto del actual");
-			Serial.println("NUEVA IP: ");
-			Serial.println(clienteEntrante);
-			
-			append_page_header();
-			webpage += ("<p>clienteEntrante distinto del actual. Debe solicitar el deslogueo o esperar timeout</p>");
-			//webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos' disabled ></form>");
-
-		}else{//si es la misma IP
-
-			flagClienteNuevo = 0;//solo debe ofrecer logout 
-			Serial.println("clienteEntrante es igual al actual: ofrece logout y permite navegación");
-			
-			append_page_header();
-			webpage += ("<p>clienteEntrante igual al actual (misma IP)</p>");
-			//webpage += ("<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>");
-			
-
-		}
-
-
-
 	}
+	if(WiFi.status() != WL_CONNECTED){//si no logró conectarse
+	
+		Serial.println("No es posible conectar a WiFi");
+		//Serial.println("Se cambia a MODO LOCAL");
 
 
+	}else{//si logró conectarse
 
 
+		Serial.println("");
+		Serial.println("Reconexion exitosa Nº ");
+		cuentaReconexion++;
+		Serial.println(cuentaReconexion);
+		Serial.println("Conectado a red WiFi!");
+		Serial.println("Dirección IP: ");
+		Serial.println(WiFi.localIP());
+	
+	}
 }

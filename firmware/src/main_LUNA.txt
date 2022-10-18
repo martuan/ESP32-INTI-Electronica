@@ -1,0 +1,166 @@
+#include <Arduino.h>
+//#ifdef ESP32
+#include <WiFi.h>
+#include <AsyncTCP.h>
+//#else
+  //#include <ESP8266WiFi.h>
+  //#include <ESPAsyncTCP.h>
+//#endif
+#include <ESPAsyncWebServer.h>
+
+#include "Network.h"
+#include "Sys_Variables.h"
+
+
+AsyncWebServer server(80);
+
+// REPLACE WITH YOUR NETWORK CREDENTIALS
+//const char* ssid = "Red-INTI";
+//const char* password = "reDES1957";
+
+//const char* PARAM_USUARIO = "input1";
+//const char* PARAM_PASS = "input2";
+
+//int logueado = 0;
+
+//IPAddress inputIP = 0.0.0.0;
+//IPAddress inputIP;
+
+// HTML web page to handle 3 input fields (input1, input2, input3)
+const char index_html[] PROGMEM = R"rawliteral(
+
+<!DOCTYPE HTML><html><head>
+<title>INTI - Caucho</title>
+<body><table><tr><td><h1>ESP32 Datalogger Webserver - INTI</h1></td>
+<h2>Login</h2>
+<form action='/login' method='post'>
+<label for='user'><b>Usuario: </b></label><input type='text' name='user' id='user' value=''>
+<label for='pass'><b>Password: </b></label><input type='password' name='pass' id='pass' value=''>
+<input type='Submit' value='Aceptar'>
+</form>
+</body></html>
+)rawliteral";
+
+void notFound(AsyncWebServerRequest *request) {
+  request->send(404, "text/plain", "Not found");
+}
+
+void setup() {
+  Serial.begin(9600);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi..");
+  }
+
+  Serial.println();
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+  Serial.println("\n");
+  
+  // Send web page with input fields to client
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+	if (logueado == 0) { //ofrece loguin
+		request->send_P(200, "text/html", index_html);
+	}else{ //hay otro usuario logueado
+		request->send_P(200, "text/html","Servidor web ocupado...<br><a href=\"/\">Retornar a pantalla inicio</a>");
+	}
+  });
+
+  server.on("/login", HTTP_POST, [] (AsyncWebServerRequest *request) {
+    String inputUsuario;
+    String inputPass;
+
+    inputUsuario = request->getParam(0)->value();
+    inputPass = request->getParam(1)->value();
+
+    Serial.print("Usuario: ");    
+    Serial.println(inputUsuario);
+    Serial.print("Clave: ");    
+    Serial.println(inputPass);
+    
+    if(inputUsuario == userEnabled1 && inputPass == passEnabled1){
+      
+      logueado = 1;
+      Serial.println(logueado);
+
+      request->send(200, "text/html", "HTTP POST enviado - usuario conectado al Webserver: "
+                                        + inputUsuario +
+                                        "<br><a href=\"/menu\">Acceder a Menu</a>");                                  
+    }else{
+      Serial.println(logueado);
+
+      request->send(200, "text/html", "HTTP POST enviado - credenciales no validas" 
+                                        "<br><a href=\"/\">Retornar a pantalla inicio</a>");
+    }
+
+  });
+  
+  server.on("/menu", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    
+    Serial.print("Entrando al menu MENU....");    
+    Serial.println(logueado);
+
+    request->send(200, "text/html", "Entrado a pagina MENU......"
+                        "<br><a href=\"/dir\">Acceder a opcion DIR</a>"
+                        "<br><a href=\"/logout\">Desconectarse de la Web</a>");
+  });
+  
+  server.on("/dir", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    
+    Serial.print("Entrando al menu DIR....");    
+    Serial.println(logueado);
+    cuentaDIR += 1;
+    Serial.println(cuentaDIR);
+
+    request->send(200, "text/html", "Entrado al menu DIR......"
+                        "<br><a href=\"/menu\">Volver a Menu</a>"
+                        "<br><a href=\"/logout\">Desconectarse de la Web</a>");
+                        //+ cuentaDIR + " veces."
+  });
+
+  server.on("/logout", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    String inputUsuario;
+    String inputPass;
+
+    logueado = 0;
+    cuentaDIR = 0;
+    Serial.println(logueado);
+    
+    request->redirect("/");
+
+    //request->send(200, "text/html", "HTTP POST enviado - usuario desconectado:"
+    //                                  + inputUsuario +
+    //                                  "<br><a href=\"/\">Retornar a pantalla login</a>");
+
+  });
+
+  server.on("/muestraIP", HTTP_ANY, [] (AsyncWebServerRequest *request) {
+    //IPAddress inputIP;
+
+	//inputIP = request->client()->remoteIP();
+
+    Serial.print("Solicitud HTTP desde IP: ");    
+    //Serial.println(inputIP);
+    Serial.println(request->client()->remoteIP());
+    Serial.println(logueado);
+    //logueado = 0;
+    request->send(200, "text/html", "Solicitud HTTP desde IP: "
+                        + (request->client()->remoteIP()).toString() +
+                        "<br><a href=\"/\">Retornar a Menu Principal</a>"
+                        "<br><a href=\"/logout\">Desconectarse de la Web</a>");
+	//request->send(200, "text/html", "Solicitud HTTP desde IP: " + inputIP.toString() + "<br><a href=\"/\">Retornar a pantalla login</a>");
+	//+ "inputIP"
+	//								+"<br><a href=\"/\">Retornar a pantalla login</a>");
+  });
+  
+ 
+  server.onNotFound(notFound);
+  server.begin();
+}
+
+void loop() {
+  
+}
