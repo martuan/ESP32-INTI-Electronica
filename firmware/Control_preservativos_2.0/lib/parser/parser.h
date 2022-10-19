@@ -15,23 +15,23 @@
 #define NO 0xfe
 // Estados posibles --------------------------------------------------------------
 // Ejemplo para el caso de estados inestables: #define ESTINEST 	INESTABLE(7)
-#define M_PPAL 			0
+/*#define M_PPAL 			0
 #define M_EDICION 		1
 #define M_SELECCION 	2
 #define M_INICIOENS 	3
 #define M_ENSAYO 		4
 #define M_SUSPENS 		5
 #define VERIF_NOMBRE 	INESTABLE(6)
-#define ERROR_NRO_OT	7
+#define ERROR_NRO_OT	7	*/
 
-class parser1   {
+/*class parser1   {
     public:
         parser1(LiquidCrystal_I2C objeto1LCD);
        LiquidCrystal_I2C _objeto1LCD;
 
     private:
 
-  };    
+  };    */
 
 	void Parser(void);
     void IniParser(void);
@@ -45,16 +45,17 @@ class parser1   {
     void AvanzaCursor (void);
     void AMEnsayo(void);
     void AMSuspEns(void);
+	void AMEnsTerminado(void);
 	void IndErrorNroOT (void);
 	void AVerifNroOT (void);
-   
+	void ensayoTerminado(void);
+
 struct estadoParser    //estructura que representa cada estado del parser
 {
 	unsigned char entrada;
 	unsigned char proxEstado;
 	void (* Accion)(void);
 };
-
 
 struct estadoParser mPpal[] =  
 {
@@ -102,6 +103,7 @@ struct estadoParser mInicioEns[] =
 struct estadoParser mEnsayo[] =  
 {
 	'B',M_SUSPENS,AMSuspEns,
+	TERMINADO, TERMINO_ENSAYO, ensayoTerminado,
 	DEFAULT,M_ENSAYO,Nada,
 };	
 
@@ -112,6 +114,12 @@ struct estadoParser mSuspEns[] =
 	DEFAULT,M_SUSPENS,Nada,
 };
 
+struct estadoParser mEnsayoTerminado[] =  
+{
+	'A',M_PPAL,AMPpal,
+	DEFAULT,TERMINO_ENSAYO,Nada,
+};	
+
 struct estadoParser * ptrEstadoParser;
 
 struct estadoParser * dirEstadoParser[]=
@@ -121,12 +129,10 @@ struct estadoParser * dirEstadoParser[]=
 	mSeleccion,
 	mInicioEns,
 	mEnsayo,
-	mSuspEns,
+	mSuspEns,	
 	verifNombre,	//Inestable.
 	errorNroOT,
+	mEnsayoTerminado,
 };
-
-
- 
 
 #endif

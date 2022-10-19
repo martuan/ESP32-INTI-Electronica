@@ -14,6 +14,7 @@ imprimirLCDI2C imprimirLcd3(lcd3);
 
 static boolean crearDirectorio = false;
 static String otActual;
+boolean  suspenderEnsayo = false;
 
 //Mensajes del estado Menú Principal.
 unsigned char msgMPpalF1[] = "1- OT ACTUAL        ";
@@ -146,6 +147,7 @@ void AMPpal(void)
 	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 1);
 	imprimirLcd3.imprimirLCDfijo((const char *)msgMPpalF1,0, 2);
 	crearDirectorio = false;
+	suspenderEnsayo = true;
 }
 
 void AMEdicion(void)
@@ -254,6 +256,7 @@ void AMEnsayo(void)
 	imprimirLcd3.imprimirLCDfijo(otActual,0, 0);
 	imprimirLcd3.imprimirLCDfijo(String((const char *)msgMEnsayoF4),0, 1);
 	flagEnsayoEnCurso = true;
+	suspenderEnsayo = false;
 }
 
 void AMSuspEns(void)
@@ -263,11 +266,23 @@ void AMSuspEns(void)
 	Serial.println((const char *)msgMSuspEnsF2);
 	imprimirLcd3.imprimirLCDfijo("A-Cancela Ensayo    ",0, 0);
 	imprimirLcd3.imprimirLCDfijo("B-Continua Ensayo   ",0, 1);
-	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 2);
+	imprimirLcd3.imprimirLCDfijo("Detenido por usuario",0, 2);
+//	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 2);
 	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 3);
 	flagEnsayoEnCurso = false;
 }
 
+void AMEnsTerminado(void)
+{
+	Serial.println();
+	Serial.println("Entro a AMEnsTerminado");
+	Serial.println((const char *)msgMSuspEnsF2);
+	imprimirLcd3.imprimirLCDfijo("A-Menu Inicio       ",0, 0);
+	imprimirLcd3.imprimirLCDfijo(" Ensayo Terminado   ",0, 1);
+	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 2);
+	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 3);
+	flagEnsayoEnCurso = false;
+}
 void AVerifNroOT (void)
 {
 	//Serial.println(contadorCaract);
@@ -287,3 +302,9 @@ void IndErrorNroOT (void)
 	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 2);
 	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 3);
 	}
+
+void ensayoTerminado(void)
+{
+	imprimirLcd3.imprimirLCDfijo("Presione A          ",0, 3);
+
+}

@@ -59,7 +59,6 @@ PCF pcf;      //Maneja el I2C para el teclado 4x4
 #include "defines.h"
 //#include "parser.cpp"
 
-  
 
 tiempoCumplido tiempoCumplido1(100);    //Usado para saber cuando escribir lecturas en la SD
 leerEEPROM leerEEPROM1(addressEEPROM_1kPa_1, addressEEPROM_2kPa_2);
@@ -77,7 +76,9 @@ teclado4x4 teclado1(pcf);             //Teclado 4x4 conectado al I2C a travez de
 //leerPuertoSerie 
 //*** Timer
 hw_timer_t * timer0 = NULL;
-boolean flagEntroTimer = false;
+boolean flagEntroTimer = false;  
+//int finEnsayoSinRuptura(int segundos, String lineaMedicion, String nombreDirectorioArchivo,String directorioArchivoOT,  boolean suspenderEnsayo){
+
 ///************
 //Rutina que crea en archivo de registro de nuevo ensayo, lo nombra según formato ISO8601 y Escribe dentro de el el encabezado del ensayo
 //********* Maquna de estados -> menues en display
@@ -86,6 +87,8 @@ extern void Parser(void);
 extern void IniParser(void);
 extern unsigned char estadoActual; 	// estado del parser
 extern boolean flagEnsayoEnCurso;
+extern boolean  suspenderEnsayo;
+
 
 //***************************************************************
 void fallaEscrituraSD(void);
@@ -215,7 +218,8 @@ void fallaEscrituraSD(){
 }
 //***********************************************************************************
 //segundos = finEnsayoSinRuptura(segundos,lineaMedicion, lineaMedicionNombreArchivo, nombreDirectorioArchivo, directorioArchivoOT);
-  int finEnsayoSinRuptura(int segundos, String lineaMedicion, String nombreDirectorioArchivo,String directorioArchivoOT,  boolean suspenderEnsayo){
+//  int finEnsayoSinRuptura(int segundos, String lineaMedicion, String nombreDirectorioArchivo,String directorioArchivoOT,  boolean suspenderEnsayo){
+  int finEnsayoSinRuptura(int segundos, String lineaMedicion, String nombreDirectorioArchivo,String directorioArchivoOT){
 //int finEnsayoSinRuptura(int segundos, String lineaMedicionAnterior, String lineaMedicionNombreArchivo,String nombreArchivo,String nombreMaquina){
   //boolean inicio = HIGH;            //Para verificar s se presionó el pulsador INICIO durante el ensayo y detener el mismo (parada de emergencia)
   int valorAD_minimo_fuelle, valorAD_maximo_fuelle;
@@ -263,7 +267,7 @@ void fallaEscrituraSD(){
   //    datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
       segundos = timeOut + 1;         //Para que salga del While
       digitalWrite(activarElectrovalvula, LOW);
-      imprimirLcd1.imprimirLCDfijo("Fin por Usuario     ",0, 2);
+//      imprimirLcd1.imprimirLCDfijo("Detenido por Usuario ",0, 1);
 //      imprimirLcd1.imprimirMedicionLCD("Fin por Usuario", 2);
       delay(1500);
    }
@@ -305,7 +309,8 @@ int obtenerVolumenAcumulado(void){
     return(volumen);
 }
 //***********************************************************************************
-boolean rutinaEnsayo(String nombreDirectorioArchivo,  boolean suspenderEnsayo){
+//boolean rutinaEnsayo(String nombreDirectorioArchivo,  boolean suspenderEnsayo){
+boolean rutinaEnsayo(String nombreDirectorioArchivo){
   static int segundos = 0;
   static String lineaMedicionAnterior = "";  //Para no guardar en Maquina_1.csv el valor de presión durante loa caída. Interesa guardar la máxima antes del reventado
     
@@ -378,7 +383,8 @@ boolean rutinaEnsayo(String nombreDirectorioArchivo,  boolean suspenderEnsayo){
               superoPresionMinima = false; 
               segundos = timeOut + 1;       //No vuenve a entrar en  while(segundos < timeOut) ni entra en if(segundos == timeOut)
           }else{
-            segundos = finEnsayoSinRuptura(segundos,lineaMedicion, nombreDirectorioArchivo, directorioArchivoOT, suspenderEnsayo);
+//            segundos = finEnsayoSinRuptura(segundos,lineaMedicion, nombreDirectorioArchivo, directorioArchivoOT, suspenderEnsayo);
+            segundos = finEnsayoSinRuptura(segundos,lineaMedicion, nombreDirectorioArchivo, directorioArchivoOT);
             lineaMedicion += ", \r\n";
 //            Serial.print(lineaMedicion);         //Si se quita el envío al puerto serie, agregar delay(10) para que escriba bien en la sd el fin de línea
             if(segundos <= timeOut) datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreDirectorioArchivo.c_str(), lineaMedicion.c_str());   
@@ -406,7 +412,7 @@ boolean rutinaEnsayo(String nombreDirectorioArchivo,  boolean suspenderEnsayo){
     lineaMedicionAnterior = "";  //Para no guardar en Maquina_1.csv el valor de presión durante loa caída. Interesa guardar la máxima antes del reventado
     ensayoEnCurso = false;
           inParser = 'B';       // Cambio de estado en Parser
-    imprimirLcd1.imprimirLCDfijo("Presione B          ",0, 3);
+//    imprimirLcd1.imprimirLCDfijo("Presione A          ",0, 3);
     presion1Anterior = 0;       //Para que no conserve el valor luego de un time out
   }
   return ensayoEnCurso;
@@ -555,7 +561,7 @@ void loop() {
   static String nombreDirectorioArchivo = "";
   boolean estadoPulsadorInicio, consultarTeclado, inicio;
   static boolean ensayoEnCurso = false;
-  static boolean  suspenderEnsayo = false;
+//  extern static boolean  suspenderEnsayo = false;
   char letraLeida = 'z';
   static int i = 0;
   String stringEstadoActual = "";
@@ -586,7 +592,7 @@ void loop() {
     }
   } 
 
-    estadoPulsadorInicio = digitalRead(pulsadorInicio);
+ //   estadoPulsadorInicio = digitalRead(pulsadorInicio);
 //  if(estadoPulsadorInicio == LOW){
   if(flagEnsayoEnCurso == true){
  // 	Serial.println("Entro al If flagEnsayoEnCurso");
@@ -597,35 +603,47 @@ void loop() {
 
 }
   if(ensayoEnCurso){
-      letraLeida = leerTeclado();
-        inParser = letraLeida;
-      if((estadoActual == 4) && (letraLeida == 'B')){
+    ensayoEnCurso = rutinaEnsayo(nombreDirectorioArchivo);
+ //     letraLeida = leerTeclado();
+  //      inParser = letraLeida;
+     /* if((estadoActual == 4) && (letraLeida == 'B')){
         //suspenderEnsayo = true;
         Parser(); //LLama al parser
         Serial.print("Estado actual1: ");
         Serial.println(estadoActual);
         delay(2000);
-        inParser = '5';
-        }   
-      if((estadoActual == 5) && (letraLeida == 'B')){
+        inParser = M_SUSPENS; //'5'
+        }   */
+     /* if((estadoActual == 5) && (letraLeida == 'B')){
         
         Parser(); //LLama al parser
         Serial.print("Estado actual2: ");
         Serial.println(estadoActual);
         delay(1000);
         letraLeida = 'z';
-      } 
-      if((estadoActual == 5) && (letraLeida == 'A')){
+      } */
+  /*    if((estadoActual == 5) && (letraLeida == 'A')){
         suspenderEnsayo = true;
         Parser(); //LLama al parser
         Serial.print("Estado actual3: ");
-        Serial.println(estadoActual);
+        Serial.println(estadoActual); */
       }else{
 //        suspenderEnsayo = false;
-        if(estadoActual == 5) suspenderEnsayo = false;
+      //  if(estadoActual == 5) suspenderEnsayo = false;
       } 
-    ensayoEnCurso = rutinaEnsayo(nombreDirectorioArchivo, suspenderEnsayo);
-  }
+//    ensayoEnCurso = rutinaEnsayo(nombreDirectorioArchivo, suspenderEnsayo);
+    
+    if(!ensayoEnCurso){
+      inParser = TERMINADO;
+       Parser();
+    }
+//  }//else{
+
+   /* if(estadoActual == M_ENSAYO){
+        //estadoActual = TERMINO_ENSAYO;
+        Parser(); //LLama al parser      
+    }  */
+  
 
  while( estadoActual & MASKINESTABLE ){
 	  Parser();       //Si el estado actual es inestable, llama al parser.  

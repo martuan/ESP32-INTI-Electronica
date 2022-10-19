@@ -13,8 +13,8 @@ char tablaTeclado[cantFilas][cantColumnas] =    // Scan codes de las teclas
 {
 	{'1','2','3','A'},	
 	{'4','5','6','B'},
-	{'7','8','9','C'},
-	{'*','0','#','D'}
+	{'7','8','9','O'},
+	{'*','0','#','E'}
 };
 //***********Constructor****************************************
     teclado4x4::teclado4x4(PCF pcf1){
