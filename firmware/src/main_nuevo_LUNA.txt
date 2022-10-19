@@ -1,0 +1,248 @@
+#include <Arduino.h>
+#include <WiFi.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+
+#include "Network.h"
+#include "Sys_Variables.h"
+
+
+#define tiempotimeOut 300 //Tiempo para timeout del webserver (en segundos). Versión final sería de 300 segundos.
+//definicion timer
+#define LED_PORT 2
+#define BAUDRATE 9600
+
+#define TIMER_0 0
+#define TIMER_1 1
+#define TIMER_2 2
+#define TIMER_3 3
+
+#define FREC_CLOCK_CPU 80000000  //En Hz
+
+#define PRESCALER_T0  80 //Prescales para timer 0.
+//timer speed (Hz) = Timer clock speed (Mhz) / prescaler
+#define FREC_T0 1 //En Hz 
+//#define CUENTA_T0 1000000 //en microsegundos.
+#define CUENTA_T0 (FREC_CLOCK_CPU / (PRESCALER_T0 * FREC_T0)) //en microsegundos.
+
+hw_timer_t *timer0 = NULL; //Puntero para configurar el timer.
+
+void IRAM_ATTR onTimer0();
+//fin definicion timer
+
+int segundos;
+int segundos_aux; //esta variable es temporaria, sólo para control t, no queda en versión final
+
+AsyncWebServer server(80); 
+
+// Armado HTML de index para web page
+const char index_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE HTML><html><head>
+<title>INTI - Caucho</title>
+<body><table><tr><td><h1>ESP32 Datalogger Webserver - INTI</h1></td>
+<h2>Login</h2>
+<form action='/login' method='post'>
+<label for='user'><b>Usuario: </b></label><input type='text' name='user' id='user' value=''>
+<label for='pass'><b>Password: </b></label><input type='password' name='pass' id='pass' value=''>
+<input type='Submit' value='Aceptar'>
+</form>
+</body></html>
+)rawliteral";
+
+void notFound(AsyncWebServerRequest *request) { //rutina de atención para páginas solicitadas no definidas 
+    request->redirect("/");                     //Toda página solicitada no definida se redirecciona a la raíz ("/")
+}
+
+void setup() {
+  Serial.begin(BAUDRATE);
+
+  //de timer
+  timeOutweb = false;
+  segundos = 0;
+  segundos_aux = 0;  //esta variable es solo para control temporario, no queda en versión final
+  pinMode(LED_PORT,OUTPUT); //Configura puerto del LED. No hace falta en versión final, es sólo de control temporario
+
+  timer0 = timerBegin(TIMER_0, PRESCALER_T0, true); // timer utilizado; Prescaler; cuenta ascendente= TRUE.
+  timerAttachInterrupt(timer0, &onTimer0, true); // Asigna la rutina de atención de ingterrupción
+                                                  // al timer0 . Activa por flanco.
+  timerAlarmWrite(timer0, CUENTA_T0, true); //Carga la cuenta del timer, Autorrecarga.
+  timerAlarmEnable(timer0); //Habilita la interrupción del timer.
+  //fin de timer
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);  //inicializa el wifi
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Conectando al WiFi..");
+  }
+
+  Serial.println();
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+  Serial.println("\n");
+  
+  IPentrante = IPAddress(0,0,0,0);
+  IPlogueada = IPAddress(0,0,0,0);
+  
+  //
+  //Comienza definición de rutinas de atención de páginas Web solicitadas
+  //
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    if (!logueado) { //si no hay usuario logueado envía página de login
+      request->send_P(200, "text/html", index_html);
+    }else{ //hay otro usuario logueado
+      
+      if ((request->client()->remoteIP()) == IPlogueada) { //ip entrante ip logueada son iguales
+        if (timeOutweb) { //hubo timeout de web
+          request->redirect("/logout");  //redirecciona a "/logout"
+        }
+        else {
+          request->redirect("/menu");  //redirecciona a "/menu"
+        }
+      }
+      else {
+        request->send_P(200, "text/html","Servidor web ocupado...<br><a href=\"/\">Retornar a pantalla inicio</a>"); //servidor atendiendo otra IP
+      }
+    }
+  });
+
+  server.on("/login", HTTP_GET, [] (AsyncWebServerRequest *request) {  //manejo de petición a "/login" del tipo GET
+    request->redirect("/");  //redirecciona a "/"
+    segundos=0;
+    segundos_aux = 0;  //esta variable es temporaria, sólo para control t, no queda en versión final
+  });
+
+  server.on("/login", HTTP_POST, [] (AsyncWebServerRequest *request) {  //manejo de petición a "/login" del tipo POST que llega cuando se ingresan las credenciales
+    String inputUsuario;
+    String inputPass;
+
+    inputUsuario = request->getParam(0)->value();
+    inputPass = request->getParam(1)->value();
+
+    if(inputUsuario == userEnabled1 && inputPass == passEnabled1){
+      
+      logueado = true;
+      IPlogueada = request->client()->remoteIP();
+      Serial.println(IPlogueada);
+      segundos=0;
+      segundos_aux = 0;  //esta variable es temporaria, sólo para control t, no queda en versión final
+      request->send(200, "text/html", "HTTP POST enviado - usuario conectado al Webserver: "
+                                        + inputUsuario +
+                                        "<br><a href=\"/menu\">Acceder a Menu</a>");                                  
+    }else{
+      request->send(200, "text/html", "HTTP POST enviado - credenciales no validas" 
+                                        "<br><a href=\"/\">Retornar a pantalla inicio</a>");
+    }
+  });
+  
+  server.on("/menu", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    if (!logueado) { //nadie logueado....logueado=0
+      request->redirect("/"); //va a llamada al raíz "/"
+    }else{ //hay usuario logueado
+      
+      if ((request->client()->remoteIP()) == IPlogueada) { //ip entrante y ya logueadan son iguales
+        if (timeOutweb) { //hubo timeout de web
+          request->redirect("/logout"); //o a "/timeout??"
+        }
+        else {
+          Serial.print("Entrando al menu MENU....");    
+          Serial.println(logueado);
+
+          request->send(200, "text/html", "Entrado a pagina MENU......"
+                        "<br><a href=\"/dir\">Acceder a opcion DIR</a>"
+                        "<br><a href=\"/logout\">Desconectarse de la Web</a>");
+          //request->redirect("/menu");
+        }
+      }
+      else {
+        request->send_P(200, "text/html","Servidor web ocupado...<br><a href=\"/\">Retornar a pantalla inicio</a>");
+      }
+    }
+    segundos=0;
+    segundos_aux = 0;  //esta variable es temporaria, sólo para control t, no queda en versión final
+
+  });
+  
+  server.on("/dir", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    if (!logueado) { //nadie logueado....logueado=0
+        request->redirect("/"); //va a llamada al raíz "/"
+    }else{ //hay usuario logueado
+        
+      if ((request->client()->remoteIP()) == IPlogueada) { //ip entrante y ya logueadan son iguales
+        if (timeOutweb) { //hubo timeout de web
+          request->redirect("/logout"); //a "/logout"
+        }
+        else {
+          Serial.print("Entrando al menu DIR....");    
+          Serial.println(logueado);
+
+          request->send(200, "text/html", "Entrado a pagina DIR......"
+                        "<br><a href=\"/menu\">Volver a MENU</a>"
+                        "<br><a href=\"/logout\">Desconectarse de la Web</a>");
+        }
+      }
+      else {
+          request->send_P(200, "text/html","Servidor web ocupado...<br><a href=\"/\">Retornar a pantalla inicio</a>");
+      }
+    }
+    segundos=0;
+    segundos_aux = 0;  //esta variable es temporaria, sólo para control t, no queda en versión final
+
+  });
+
+  server.on("/logout", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    if ((request->client()->remoteIP()) == IPlogueada) { //ip entrante e ip logueada son iguales
+      timeOutweb = false;
+      logueado = false;
+      Serial.println(logueado); //control temporario. no queda en versión final
+        
+      segundos = 0;
+      segundos_aux = 0;  //esta variable es temporaria, sólo para control t, no queda en versión final
+      digitalWrite(LED_PORT, LOW); //apaga el led (control temporario), no hace falta en versión definitiva
+    }
+    request->redirect("/");
+  
+  });
+
+  server.onNotFound(notFound);  //rutina de atención de páginas web solicitadas y no definidas
+  
+  server.begin();  //inicializa el webserver
+  logueado = false;
+}
+
+void loop() {
+  
+  //inicio del bloque de control (es temporario), no queda en versión definitiva
+  if (segundos>segundos_aux){
+    Serial.print("Segundos....");
+    Serial.print(segundos);
+    Serial.print("   Var.timeOutweb....");
+    Serial.print(timeOutweb);
+    Serial.print("   Var.logueado....");
+    Serial.println(logueado);
+    segundos_aux=segundos;
+
+    if (WiFi.status() != WL_CONNECTED) { //controla e informa si pierde conexión wifi
+      Serial.println("WiFi desconectado..");
+    }
+  }
+  //fin del bloque de control (es temporario), no queda en versión definitiva
+
+}
+
+//-------------------------------------------------------------
+// Timer: Rutina de atención de interrupción de timer
+//-------------------------------------------------------------
+void IRAM_ATTR onTimer0() //rutina de atención del timer (se ejecuta cada 1 segundo)
+{
+  segundos += 1;
+  if (segundos >= tiempotimeOut){
+    segundos=0;
+    segundos_aux = 0;  //esta variable es temporaria, sólo para control t, no queda en versión final
+    if (logueado) {
+      timeOutweb = true;  
+      digitalWrite(LED_PORT, HIGH); //enciende el led (control temporario), no hace falta en versión definitiva 
+    }
+  }
+}

@@ -1,5 +1,4 @@
 String userEnabled1 = "admin";
-//String passEnabled1 = "Inti1957";
 String passEnabled1 = "4321";
 
 String paquete_html = {};
@@ -46,11 +45,14 @@ String ending_html = "</body></html>";
 const char* PARAM_USUARIO = "input1";
 const char* PARAM_PASS = "input2";
 
-int logueado = 0;
+bool logueado;
+bool timeOutweb;
 int cuentaDIR = 0;
 
 //IPAddress inputIP = 0.0.0.0;
-IPAddress inputIP;
+//IPAddress inputIP;
+IPAddress IPentrante;
+IPAddress IPlogueada;
 
 int cuentaReconexion = 0;
 
