@@ -34,15 +34,11 @@ void imprimirLCDI2C::imprimirLCDfijo(String lineaMedicionLCD, int columna, int f
 }
 //***************************************************************************************
 void imprimirLCDI2C::mensajeInicialLCDcalibracion(int numeroSensor){
-    imprimirLCDfijo("Con pulsador",0, 0);
-    imprimirLCDfijo("CALIBRACION",0, 1);
-    imprimirLCDfijo("seleccione sensor",0, 2);
-    delay(5000);
     _objetoLCD.clear();
-    imprimirLCDfijo("Sensor seleccionado:",0, 0);
-    imprimirLCDfijo(String(numeroSensor),0, 1);              
-    imprimirLCDfijo("Presionar pulsador",0, 2);         
-    imprimirLCDfijo("INICIO para calibrar",0, 3);         
+    imprimirLCDfijo("Seleccione sensor:",0, 0);
+    imprimirLCDfijo("1 o 2, y presione A",0, 1);   
+    imprimirLCDfijo("Sensor seleccionado:",0, 2);
+    imprimirLCDfijo(String(numeroSensor),10, 3);                    
 }
 //**************************************************************************************************
 
@@ -55,6 +51,11 @@ void imprimirLCDI2C::mensajeLCDcalibracion(int muestraPorPunto, float puntoCalib
       imprimirLCDfijo(linea_1,0, 0);         
       imprimirLCDfijo(linea_2,0, 1);         
       imprimirLCDfijo("y presione",0, 2);         
-      imprimirLCDfijo("INICIO",0, 3);         
+      imprimirLCDfijo("#",0, 3);         
+
+}
+
+void imprimirLCDI2C::limpiarLCD(void){
+    _objetoLCD.clear();
 
 }

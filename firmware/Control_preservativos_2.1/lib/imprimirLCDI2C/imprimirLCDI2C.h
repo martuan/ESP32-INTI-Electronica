@@ -13,6 +13,7 @@ class imprimirLCDI2C   {
         void mensajeInicialLCDcalibracion(int numeroSensor);
         void mensajeLCDcalibracion(int muestraPorPunto, float puntoCalibracion);
         void imprimirLCDfijo(String lineaMedicionLCD, int columna, int fila);
+        void limpiarLCD(void);
   
     private:
         LiquidCrystal_I2C _objetoLCD;

@@ -30,6 +30,7 @@
 #define VERIF_NOMBRE 	INESTABLE(6)
 #define ERROR_NRO_OT	7
 #define TERMINO_ENSAYO 	8
-
+#define M_CALIBRACION	9
+#define CALIBRANDO		10		//Calibración en curso
 
 #endif

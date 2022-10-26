@@ -10,7 +10,8 @@
 #define DHTTYPE DHT22           // Sensor DHT22
 #define CS 5                   //Pin de Chip Select para escribir el SD
 #define pulsadorInicio 4       //Pulsador de inicio de ensayo. Parada durante el ensayo. Guardar valor durante calibración 
-#define activarElectrovalvula 25    //Activa electroválvula que permite paro de aire para inflado de preservativo y fuelle
+#define electrovalvulaPresrevativo 25    //Activa electroválvula que permite paro de aire para inflado de preservativo
+#define electrovalvulaFuelle 26    //Activa electroválvula que infla el fuelle para sujetar el preservativo
 #define EEPROM_SIZE 420 //Se usaran 20 enteros => 4by * 20    //Utilizado para guardar las constantes de calibración de los sensores de presión
                                                               //Sensor 1 , se guardan pendientes y ordenadas al origen (Se linealiza la curva en 10 segmentos)
                                                               //Sensor 2 , se guardan los valores digitales del AD correspondientes a 1kPa y 2kPa. Aqui solo interesa
@@ -25,7 +26,7 @@
 #define addressEEPROM_2kPa_2  196  //Guarda el valor del AD para 2kPa en el sensor 2 (Fuelle)
 #define addressEEPROM_checksum_2_fuelle 200
 #define flagIntentoRecalibrar 204  // En "1" si ya intento recomponer calibración, en "0" si no   
-#define addressEEPROM_ultimaOT 207  //Este utiliza 7 caracteres
+#define addressEEPROM_ultimaOT 211  //Este utiliza 7 caracteres
 //#define direccionLCD    0x27    //Igual a PCF8574_ADDR_A21_A11_A01
 #define NUMERO_MAQUINA 1
 #define addresspcf8574_KeyPad   0x20    // The PCF8574 is configured to 0x20 I2C address. Check A0, A1 and A2 pins of the device.

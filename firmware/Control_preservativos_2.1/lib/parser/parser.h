@@ -49,7 +49,9 @@
 	void IndErrorNroOT (void);
 	void AVerifNroOT (void);
 	void ensayoTerminado(void);
-
+	void AMCalibracion(void);
+	void calibracionEnCurso(void);
+	
 struct estadoParser    //estructura que representa cada estado del parser
 {
 	unsigned char entrada;
@@ -61,7 +63,7 @@ struct estadoParser mPpal[] =
 {
 	'1',M_SELECCION,AMSeleccion,
 	'2',M_EDICION,AMEdicion,
-//	'A',M_EDICION,AMEdicion,
+	'9',M_CALIBRACION,AMCalibracion,
 	DEFAULT,M_PPAL,Nada,
     
 };
@@ -120,6 +122,18 @@ struct estadoParser mEnsayoTerminado[] =
 	DEFAULT,TERMINO_ENSAYO,Nada,
 };	
 
+struct estadoParser mCalibracion[] =  
+{
+	'B',M_PPAL,AMPpal,
+	'A',CALIBRANDO,calibracionEnCurso,
+	DEFAULT,TERMINO_ENSAYO,Nada,
+};	
+
+struct estadoParser estadoCalibracionEnCurso[] =  
+{
+	DEFAULT,CALIBRANDO,Nada,
+};	
+
 struct estadoParser * ptrEstadoParser;
 
 struct estadoParser * dirEstadoParser[]=
@@ -133,6 +147,8 @@ struct estadoParser * dirEstadoParser[]=
 	verifNombre,	//Inestable.
 	errorNroOT,
 	mEnsayoTerminado,
+	mCalibracion,
+	estadoCalibracionEnCurso,
 };
 
 #endif

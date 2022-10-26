@@ -19,6 +19,8 @@ boolean  suspenderEnsayo = false;
 //Mensajes del estado Menú Principal.
 unsigned char msgMPpalF1[] = "1- OT ACTUAL        ";
 unsigned char msgMPpalF2[] = "2- Otra OT          ";
+unsigned char msgMPpalCalibrar[] = "9- Calibrar";
+
 //Mensajes del estado Menú de Selección.
 unsigned char msgMSeleccion[] = "A Menu Seleccion";
 //Mensajes del estado Menú de Edición.
@@ -39,7 +41,7 @@ unsigned char msgMSuspEnsF1[] = "A-Suspende Ensayo   ";
 unsigned char msgMSuspEnsF2[] = "B-Continua Ensayo   ";
 //Mensajes del estado errorNroOT
 unsigned char msgMerrorNroOTF1[] = "Complete Nro OT     ";
-unsigned char msgMerrorNroOTF2[] = "A-para continuar    ";
+unsigned char msgMerrorNroOTF2[] = "A- Para continuar   ";
 unsigned char nroOT[CANTDIGITOS+1]; //Array que contiene el nro de OT actual en ASCII. Es +1 para el NULL
 
 unsigned char lineaVacia[] = "                    ";
@@ -53,6 +55,7 @@ unsigned char estadoActual; 	// estado del parser
 unsigned char estadoAnterior;	// utilizado para los casos en que se 
 								// necesita saber de donde viene.
 boolean flagEnsayoEnCurso;
+boolean flagCalibracionEnCurso;
 
 //Variables para edición en el display.
 unsigned char numPosIni;	//Posición inicial del cursor en el campo de edición.
@@ -86,6 +89,7 @@ void Parser(void)
 	{
 		ptrEstadoParser++;//si no es la entrada buscada pasa a la otra.
 	}
+	
 	estadoActual = ptrEstadoParser->proxEstado; //actualiza estado
 	
 	(*ptrEstadoParser->Accion) (); 			//realiza acción
@@ -99,10 +103,15 @@ void IniParser(void)
 	//inParser = CR;
 	imprimirLcd3.inicializarLCD(20, 4);
 	//inicializoLCD3 = true;
-	imprimirLcd3.imprimirLCDfijo((const char *)msgINTICaucho,0, 0);
+/*	imprimirLcd3.imprimirLCDfijo((const char *)msgINTICaucho,0, 0);
 	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 1);
 	imprimirLcd3.imprimirLCDfijo((const char *)msgMPpalF1,0, 2);
-	imprimirLcd3.imprimirLCDfijo((const char *)msgMPpalF2,0, 3);
+	imprimirLcd3.imprimirLCDfijo((const char *)msgMPpalF2,0, 3);	*/
+	imprimirLcd3.imprimirLCDfijo((const char *)msgINTICaucho,0, 0);
+	imprimirLcd3.imprimirLCDfijo((const char *)msgMPpalF1,0, 1);
+	imprimirLcd3.imprimirLCDfijo((const char *)msgMPpalF2,0, 2);
+	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 3);
+	imprimirLcd3.imprimirLCDfijo((const char *)msgMPpalCalibrar,0, 3);	
 
 }
 //
@@ -142,12 +151,14 @@ void AMPpal(void)
 	Serial.println();
 	Serial.println((const char *)msgMPpalF1);
 	Serial.println((const char *)msgMPpalF2);
-	imprimirLcd3.imprimirLCDfijo((const char *)msgMPpalF2,0, 3);
 	imprimirLcd3.imprimirLCDfijo((const char *)msgINTICaucho,0, 0);
-	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 1);
-	imprimirLcd3.imprimirLCDfijo((const char *)msgMPpalF1,0, 2);
+	imprimirLcd3.imprimirLCDfijo((const char *)msgMPpalF1,0, 1);
+	imprimirLcd3.imprimirLCDfijo((const char *)msgMPpalF2,0, 2);
+	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 3);
+	imprimirLcd3.imprimirLCDfijo((const char *)msgMPpalCalibrar,0, 3);
 	crearDirectorio = false;
 	suspenderEnsayo = true;
+	flagCalibracionEnCurso = false;
 }
 
 void AMEdicion(void)
@@ -298,13 +309,32 @@ void IndErrorNroOT (void)
 	Serial.println((const char *)msgMerrorNroOTF1);
 	Serial.println((const char *)msgMerrorNroOTF2);
 	imprimirLcd3.imprimirLCDfijo("Complete Nro OT      ",0, 0);
-	imprimirLcd3.imprimirLCDfijo("A para continuar    ",0, 1);
+//	imprimirLcd3.imprimirLCDfijo("A para continuar    ",0, 1);
+	imprimirLcd3.imprimirLCDfijo((const char *)msgMerrorNroOTF2,0, 1);		// A - para continuar
 	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 2);
 	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 3);
 	}
 
 void ensayoTerminado(void)
 {
-	imprimirLcd3.imprimirLCDfijo("Presione A          ",0, 3);
+	imprimirLcd3.imprimirLCDfijo((const char *)lineaVacia,0, 3);
+	imprimirLcd3.imprimirLCDfijo("Presione A",0, 3);
 
+}
+
+void AMCalibracion(void)
+{
+	imprimirLcd3.limpiarLCD();	
+	imprimirLcd3.imprimirLCDfijo((const char *)msgMerrorNroOTF2,0, 1);		// A - para continuar
+	imprimirLcd3.imprimirLCDfijo((const char *) msgBvolver,0, 3);
+}
+
+void calibracionEnCurso(void)
+{
+	imprimirLcd3.limpiarLCD();
+	imprimirLcd3.imprimirLCDfijo("Presione pulsador",0,1);		
+	imprimirLcd3.imprimirLCDfijo("CALIBRACION",0,2);		
+	flagCalibracionEnCurso = true;
+	Serial.print("Flag Calibracion en curso: ");
+	Serial.println(flagCalibracionEnCurso);
 }
