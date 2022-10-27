@@ -47,6 +47,7 @@
 //     LiquidCrystal_I2C lcd2(PCF8574_ADDR_A21_A11_A01, 4, 5, 6, 16, 11, 12, 13, 14, POSITIVE);  //PCF8574_ADDR_A21_A11_A01 -> dicección I2C del display físico  0X27
       static imprimirLCDI2C imprimirLcd2(_objetoLCD);
       static char letraLeidaAnterior = '3';
+      static boolean _1kPaCalibrado = false;
 
         if(letraLeidaAnterior != letraLeida){
           letraLeidaAnterior = letraLeida;
@@ -167,46 +168,52 @@
         imprimirLcd2.mensajeLCDcalibracion(1, 1);
 
         inicio = HIGH;          
-        while(inicio == HIGH){
+/*        while(inicio == HIGH){
           inicio = digitalRead(pulsadorInicio); 
-          }
-        valorPresionFuelle = analogRead(sensorPresion2);
-        EEPROM.writeInt(addressEEPROM_1kPa_1, valorPresionFuelle);       //Escribir en EEPROM en posicion addressEEPROM
-        EEPROM.writeInt(addressEEPROM_1kPa_2, valorPresionFuelle);       //(para recuperación por si falla el primero)
-        EEPROM.commit();
-        sumaValoresPresionesFuelle = valorPresionFuelle;
-        Serial.print("El valor para 1kPa es: ");         
-        Serial.println(valorPresionFuelle);
-        delay(800);
-        Serial.println("Suba la presión a 2kPa  y presione INICIO");
-//        _imprimirLCDI2C.mensajeLCDcalibracion(1, 2);
-        imprimirLcd2.mensajeLCDcalibracion(1, 2);
-        inicio = HIGH;          
+          }*/
+        if((letraLeida == '#') && (_1kPaCalibrado == false)) {
+          valorPresionFuelle = analogRead(sensorPresion2);
+          EEPROM.writeInt(addressEEPROM_1kPa_1, valorPresionFuelle);       //Escribir en EEPROM en posicion addressEEPROM
+          EEPROM.writeInt(addressEEPROM_1kPa_2, valorPresionFuelle);       //(para recuperación por si falla el primero)
+          EEPROM.commit();
+          sumaValoresPresionesFuelle = valorPresionFuelle;
+          Serial.print("El valor para 1kPa es: ");         
+          Serial.println(valorPresionFuelle);
+          delay(800);
+          Serial.println("Suba la presión a 2kPa  y presione #");
+  //        _imprimirLCDI2C.mensajeLCDcalibracion(1, 2);
+          imprimirLcd2.mensajeLCDcalibracion(1, 2);  
+          letraLeida = 'z';
+          _1kPaCalibrado = true;
+        }  
+
+/*        inicio = HIGH;          
         while(inicio == HIGH){
           inicio = digitalRead(pulsadorInicio);          
-          }
-        valorPresionFuelle = analogRead(sensorPresion2);
-        EEPROM.writeInt(addressEEPROM_2kPa_1, valorPresionFuelle);       //Escribir en EEPROM  en posicion addressEEPROM
-        EEPROM.writeInt(addressEEPROM_2kPa_2, valorPresionFuelle);       //(para recuperación por si falla el primero)
-        sumaValoresPresionesFuelle = valorPresionFuelle + sumaValoresPresionesFuelle;
-        EEPROM.writeInt(addressEEPROM_checksum_1_fuelle, sumaValoresPresionesFuelle);       //Escribir checksum 1 del sensor fuelle
-        EEPROM.writeInt(addressEEPROM_checksum_2_fuelle, sumaValoresPresionesFuelle);       //Escribir checksum 2 del sensor fuelle (para recuperación por si falla el primero)
-        EEPROM.commit();
-        
-        Serial.print("El valor para 2kPa es: ");         
-        Serial.println(valorPresionFuelle);
-        delay(800);                   
-//       _imprimirLcd1.imprimirLCDfijo(" Sensor 2          ",0, 2);
-       imprimirLcd2.imprimirLCDfijo(" Sensor 2          ",0, 2);
+          }*/
+         if(letraLeida == '#'){
+          valorPresionFuelle = analogRead(sensorPresion2);
+          EEPROM.writeInt(addressEEPROM_2kPa_1, valorPresionFuelle);       //Escribir en EEPROM  en posicion addressEEPROM
+          EEPROM.writeInt(addressEEPROM_2kPa_2, valorPresionFuelle);       //(para recuperación por si falla el primero)
+          sumaValoresPresionesFuelle = valorPresionFuelle + sumaValoresPresionesFuelle;
+          EEPROM.writeInt(addressEEPROM_checksum_1_fuelle, sumaValoresPresionesFuelle);       //Escribir checksum 1 del sensor fuelle
+          EEPROM.writeInt(addressEEPROM_checksum_2_fuelle, sumaValoresPresionesFuelle);       //Escribir checksum 2 del sensor fuelle (para recuperación por si falla el primero)
+          EEPROM.commit();
+          
+          Serial.print("El valor para 2kPa es: ");         
+          Serial.println(valorPresionFuelle);
+          delay(100);                   
+  //       _imprimirLcd1.imprimirLCDfijo(" Sensor 2          ",0, 2);
+        imprimirLcd2.imprimirLCDfijo(" Sensor 2          ",0, 2);
+         }  
      }
-      EEPROM.writeInt(flagIntentoRecalibrar, 0);       //Se indica en "cero" que no entro en Recupero de calibración
-      EEPROM.commit();
 
 if(calibracionFinalizada){
     imprimirLcd2.imprimirLCDfijo("                    ",0, 1);
     imprimirLcd2.imprimirLCDfijo(" Fin de Calibracion",0, 0);
     imprimirLcd2.imprimirLCDfijo("Reinicie el equipo  ",0, 3);
-
+    EEPROM.writeInt(flagIntentoRecalibrar, 0);       //Se indica en "cero" que no entro en Recupero de calibración
+    EEPROM.commit();
 }
 
     }
