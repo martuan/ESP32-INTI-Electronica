@@ -81,7 +81,7 @@ RTC_DS3231 rtc;
 #define tiempotimeOut 300 //Tiempo para timeout del webserver (en segundos). Versión final sería de 300 segundos.
 //definicion timer
 #define LED_PORT 2
-#define BAUDRATE 9600
+#define BAUDRATE 115200
 
 #define TIMER_0 0
 #define TIMER_1 1
@@ -166,7 +166,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 
 <!DOCTYPE HTML><html>
 <head>
-
+	<meta charset='utf-8'>
 	<meta name='viewport' content='user-scalable=yes,initial-scale=1.0,width=device-width'>
 	<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css'>
 	<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css' integrity='sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm' crossorigin='anonymous'>
@@ -207,7 +207,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 <title>INTI - Caucho</title>
 <body><table><tr><td><h1>ESP32 Datalogger Webserver - INTI</h1></td>
 
-<form action='/login' method='post'>
+<form action='/login' method='post' accept-charset='utf-8'>
 <label for='user'><b>Usuario: </b></label><input type='text' name='user' id='user' value=''>
 <label for='pass'><b>Password: </b></label><input type='password' name='pass' id='pass' value=''>
 <input type='Submit' value='Aceptar'>
@@ -219,7 +219,7 @@ const char menu_html[] PROGMEM = R"rawliteral(
 
 <!DOCTYPE HTML><html>
 <head>
-
+	<meta charset='utf-8'>
 	<meta name='viewport' content='user-scalable=yes,initial-scale=1.0,width=device-width'>
 	<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css'>
 	<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css' integrity='sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm' crossorigin='anonymous'>
@@ -260,9 +260,9 @@ const char menu_html[] PROGMEM = R"rawliteral(
 <title>INTI - Caucho</title>
 <body><table><tr><td><h1>Menu</h1></td></tr></table>
 
-<form action='/dir' method='post'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>
+<form action='/dir' method='post' accept-charset='utf-8'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>
 <br>
-<form action='/logout' method='post'><input type='hidden' name='logout' id='logout' value='/'><input type='Submit' value='Logout'></form>
+<form action='/logout' method='post' accept-charset='utf-8'><input type='hidden' name='logout' id='logout' value='/'><input type='Submit' value='Logout'></form>
 
 
 </body></html>
@@ -272,7 +272,7 @@ const char listSD_start_html[] PROGMEM = R"rawliteral(
 
 <!DOCTYPE HTML><html>
 <head>
-
+	<meta charset='utf-8'>
 	<meta name='viewport' content='user-scalable=yes,initial-scale=1.0,width=device-width'>
 	<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css'>
 	<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css' integrity='sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm' crossorigin='anonymous'>
@@ -314,9 +314,9 @@ const char listSD_start_html[] PROGMEM = R"rawliteral(
 <body><table><tr><td><h1>DIR</h1></td></tr></table>
 
 
-<form action='/menu' method='post'><input type='hidden' name='directorio' id='root' value='menu'><input type='Submit' value='Volver al menu'></form>
+<form action='/menu' method='post' accept-charset='utf-8'><input type='hidden' name='directorio' id='root' value='menu'><input type='Submit' value='Volver al menu'></form>
 <br>
-<form action='/logout' method='post'><input type='hidden' name='logout' id='logout' value='/'><input type='Submit' value='Logout'></form>
+<form action='/logout' method='post' accept-charset='utf-8'><input type='hidden' name='logout' id='logout' value='/'><input type='Submit' value='Logout'></form>
 
 
 
@@ -334,6 +334,7 @@ const char html_root[] PROGMEM = R"rawliteral(
 	
 	<!DOCTYPE html><html>
 	<head>
+	<meta charset='utf-8'>
 	<title>ESP32 Datalogger Webserver - INTI</title> // NOTE: 1em = 16px
 	<meta name='viewport' content='user-scalable=yes,initial-scale=1.0,width=device-width'>
 	<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css'>
@@ -544,11 +545,13 @@ void setup(void){
 		
 		if (!logueado) { //nadie logueado....logueado=0
       		request->redirect("/"); //va a llamada al raíz "/"
+			Serial.println("usuario no logueado, va al /");
 		}else{ //hay usuario logueado
 		
 			if ((request->client()->remoteIP()) == IPlogueada) { //ip entrante y ya logueadan son iguales
 				if (timeOutweb) { //hubo timeout de web
 					request->redirect("/logout"); //o a "/timeout??"
+					Serial.println("timeoutWeb");
 				}else{
 					Serial.print("Entrando al menu MENU....");    
 					Serial.println(logueado);
@@ -562,6 +565,7 @@ void setup(void){
 					//request->redirect("/menu");
 				}
 			}else{
+				Serial.println("entra al else ServidorOcupado");
 				request->send_P(200, "text/html","Servidor web ocupado...<br><a href=\"/\">Retornar a pantalla inicio</a>");
 			}
 		}
@@ -574,11 +578,13 @@ void setup(void){
 		
 		if (!logueado) { //nadie logueado....logueado=0
         	request->redirect("/"); //va a llamada al raíz "/"
+			Serial.println("No logueado");
     	}else{ //hay usuario logueado
         
 			if ((request->client()->remoteIP()) == IPlogueada) { //ip entrante y ya logueadan son iguales
 				if (timeOutweb) { //hubo timeout de web
 					request->redirect("/logout"); //a "/logout"
+					Serial.println("venció el timeout, redirect a /logout");
 				}else{
 					Serial.print("Entrando al menu DIR....");    
 					Serial.println(logueado);
@@ -591,8 +597,11 @@ void setup(void){
 
 					//request->send(200, "text/html", menu_html);
 					//request->hasArg()
-
+					Serial.println("pathDirectory antes de listar_SD_dir = ");
+					Serial.println(pathDirectory);
 					listar_SD_dir(param1, param2, request);
+					Serial.println("pathDirectory después de listar_SD_dir = ");
+					Serial.println(pathDirectory);
 					
 					cuentaIntentos++;
 					/*
@@ -739,6 +748,7 @@ void setup(void){
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void loop(void){
 
+/*
 	//inicio del bloque de control (es temporario), no queda en versión definitiva
 	if (segundos>segundos_aux){
 		Serial.print("Segundos....");
@@ -751,7 +761,7 @@ void loop(void){
 
 	}
   	//fin del bloque de control (es temporario), no queda en versión definitiva
-
+*/
 
 	
 
@@ -839,12 +849,16 @@ void SD_file_download(String filename, AsyncWebServerRequest *request){
 void listar_SD_dir(String param1, String param2, AsyncWebServerRequest *request){
 
 
-	Serial.println("cantidad de parametros = ");
+	Serial.print("cantidad de parametros = ");
 	Serial.println(request->params());
 	param1 = request->getParam(0)->value();
 
 	Serial.println(param1);
 
+	Serial.println("***********************************");
+	Serial.print("pathDirectory antes de verificar usuario logueado = ");
+	Serial.println(pathDirectory);
+	Serial.println("***********************************");
 
 	if(logueado){
 		Serial.println("usuario logueado");
@@ -859,11 +873,15 @@ void listar_SD_dir(String param1, String param2, AsyncWebServerRequest *request)
 			}else{
 				
 				String directorio = param1;
+				Serial.print("Directorio tomado de param1 = ");
+				Serial.println(directorio);
 				
 
 				if (request->hasArg("directorio")){//si se pide avanzar adelante (un directorio nuevo)
 					
-					pathDirectory = pathDirectory + directorio + "/" ;
+					Serial.println("Tiene argumento 'directorio'");
+					pathDirectory = pathDirectory + directorio + "/";
+					//pathDirectory = "/Ensayos/nivel1/nivel2/";
 					Serial.print("pathDirectory = ");
 					Serial.println(pathDirectory);
 					
@@ -871,7 +889,7 @@ void listar_SD_dir(String param1, String param2, AsyncWebServerRequest *request)
 
 					if(pathDirectory != ROOTDIR){
 						
-						
+						Serial.println("Tiene argumento 'directorioAtras'");
 						pathDirectory = pathDirectory.substring(0, pathDirectory.lastIndexOf('/'));//recorta
 						pathDirectory = pathDirectory.substring(0, pathDirectory.lastIndexOf('/')+1);//recorta
 						Serial.print("pathDirectory (atras) = ");
@@ -891,7 +909,7 @@ void listar_SD_dir(String param1, String param2, AsyncWebServerRequest *request)
 				root.rewindDirectory();
 
 				webpage += F("<h3 class='rcorners_m'>Contenido de la memoria SD</h3><br>");
-				webpage += F("<form action='/logout' method='post'><input type='hidden' name='logout' id='logout' value='/'><input type='Submit' value='Logout'></form>");
+				webpage += F("<form action='/logout' method='post' accept-charset='utf-8'><input type='hidden' name='logout' id='logout' value='/'><input type='Submit' value='Logout'></form>");
 				
 				webpage += F("<form action='/consultarPorFecha'><label for='Fecha'>Fecha: </label><input type='date' id='fechaEnsayo' name='fechaEnsayo'><input type='submit'></form><br>");
 
@@ -899,7 +917,7 @@ void listar_SD_dir(String param1, String param2, AsyncWebServerRequest *request)
 
 				webpage += F("<table class='table table-striped'>");
 				webpage += F("<tr><th scope='col'>Nombre</th><th scope='col'>Fecha</th><th scope='col'>Archivo/Directorio</th><th scope='col'>Tama&ntildeo</th><th scope='col'>Eliminar</th><th scope='col'>Descargar</th></tr>");
-				webpage += "<tr><td><form action='/dir' method='post'><input type='hidden' name='directorioAtras' id='directorioAtras' value='../'><input type='Submit' value='../'></form></td><td></td><td></td><td></td><td align='center'></td><td></td></tr>";
+				webpage += "<tr><td><form action='/dir' method='post' accept-charset='utf-8'><input type='hidden' name='directorioAtras' id='directorioAtras' value='../'><input type='Submit' value='../'></form></td><td></td><td></td><td></td><td align='center'></td><td></td></tr>";
 
 				printDirectory_v5(root);
 
@@ -910,12 +928,25 @@ void listar_SD_dir(String param1, String param2, AsyncWebServerRequest *request)
 				
 				armarPaqueteHtml(prueba);
 
+				//Serial.println(paquete_html);
+//				request->beginChunkedResponse()
+
 				request->send(200, "text/html", paquete_html.c_str());
 
 				root.close();
 			}
 			else{
 				webpage += F("<h3>No Files Found</h3>");
+				Serial.println("No files found");
+				
+				String prueba = webpage;
+				
+				armarPaqueteHtml(prueba);
+
+				//Serial.println(paquete_html);
+//				request->beginChunkedResponse()
+
+				request->send(200, "text/html", paquete_html.c_str());
 			}
 
 		} else ReportSDNotPresent();
@@ -948,7 +979,8 @@ void printDirectory_v5(SdFile path){
 			
 			rutaDeArchivo = String(entryName);
 			
-			webpage += "<tr><td><form action='/dir' method='post'><input type='hidden' name='directorio' id='directorio' value="+ String(rutaDeArchivo) +"><input type='hidden' name='cuenta' id='cuenta' value="+ String(cuenta) +"><input type='Submit' value="+String(rutaDeArchivo)+"></form></td><td></td><td>"+String(entry.isDirectory()?"Dir":"File")+"</td><td></td><td align='center'></td><td></td></tr>";
+			//webpage += "<tr><td><form action='/dir' method='post' accept-charset='utf-8'><input type='hidden' name='directorio' id='directorio' value="+ String(rutaDeArchivo) +"><input type='hidden' name='cuenta' id='cuenta' value='"+ String(cuenta) +"'><input type='Submit' value='"+String(rutaDeArchivo)+"'></form></td><td></td><td>"+String(entry.isDirectory()?"Dir":"File")+"</td><td></td><td align='center'></td><td></td></tr>";
+			webpage += "<tr><td><form action='/dir' method='post' accept-charset='utf-8'><input type='hidden' name='directorio' value='"+ String(rutaDeArchivo) +"'><input type='hidden' name='cuenta' id='cuenta' value='"+ String(cuenta) +"'><input type='Submit' value='"+String(rutaDeArchivo)+"'></form></td><td></td><td>"+String(entry.isDirectory()?"Dir":"File")+"</td><td></td><td align='center'></td><td></td></tr>";
 
 
 			
@@ -1644,10 +1676,10 @@ void agregaFilaEnTabla(String nombreDeArchivo, String fechaNormalizada, String r
 	else if(bytes < (1024 * 1024 * 1024)) fsize = String(bytes/1024.0/1024.0,3)+" MB";
 	else                                  fsize = String(bytes/1024.0/1024.0/1024.0,3)+" GB";
 
-	webpage += "<td>"+fsize+"</td><td><form action='/delete' method='post'><input type='text' hidden name='lname' value='"+String(rutaDeArchivo)+"'><input type='submit' name='delete' value='Borrar'></form></td>";
+	webpage += "<td>"+fsize+"</td><td><form action='/delete' method='post' accept-charset='utf-8'><input type='text' hidden name='lname' value='"+String(rutaDeArchivo)+"'><input type='submit' name='delete' value='Borrar'></form></td>";
 	Serial.print("		Archivo a descargar = ");
 	Serial.print(rutaDeArchivo);
-	webpage += "<td><form action='/download' method='post'><input type='text' hidden name='lname' value='"+String(rutaDeArchivo)+"'><input type='submit' name='download' value='Descargar'></form></td>";
+	webpage += "<td><form action='/download' method='post' accept-charset='utf-8'><input type='text' hidden name='lname' value='"+String(rutaDeArchivo)+"'><input type='submit' name='download' value='Descargar'></form></td>";
 	Serial.print("\t");
 	Serial.println(String(fsize));
 
@@ -1803,8 +1835,20 @@ void reconnectWifi(void){
 }
 
 void notFound(AsyncWebServerRequest *request) { //rutina de atención para páginas solicitadas no definidas 
-    pathDirectory = ""; //resetea el directorio para una nueva navegación
-	request->redirect("/");                     //Toda página solicitada no definida se redirecciona a la raíz ("/")
+    //pathDirectory = ""; //resetea el directorio para una nueva navegación
+	
+	Serial.print("URL = ");
+	Serial.println(request->url());
+	if(request->url().endsWith(".ico")){
+		Serial.println("se trata de favicon.ico");
+	}else{
+		Serial.println("URL no encontrada: no es favicon.ico");
+		Serial.println("URL no encontrada, resetea pathDirectory y redirect a /");
+		pathDirectory = ""; //resetea el directorio para una nueva navegación
+		request->redirect("/");                     //Toda página solicitada no definida se redirecciona a la raíz ("/")
+	}
+	//Serial.println("URL no encontrada");
+	//request->redirect("/");                     //Toda página solicitada no definida se redirecciona a la raíz ("/")
 }
 
 void IRAM_ATTR onTimer0() //rutina de atención del timer (se ejecuta cada 1 segundo)
@@ -1814,6 +1858,7 @@ void IRAM_ATTR onTimer0() //rutina de atención del timer (se ejecuta cada 1 seg
     segundos=0;
     segundos_aux = 0;  //esta variable es temporaria, sólo para control t, no queda en versión final
     if (logueado) {
+		Serial.println("Resetea pathDirectory porque venció el timeout");
 		pathDirectory = "";//resetea el directorio para una nueva navegación
 		timeOutweb = true;  
 		digitalWrite(LED_PORT, HIGH); //enciende el led (control temporario), no hace falta en versión definitiva 
