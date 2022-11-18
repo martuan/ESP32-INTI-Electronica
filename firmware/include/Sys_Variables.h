@@ -82,7 +82,11 @@ bool flagUsuarioHabilitado = 0;
 bool flagWebserverLibre = 1;
 bool flagUsuarioLogueado = 0;
 bool flagClienteNuevo = 0;
+bool flagMarcarTodo = 0;
+bool flagDescargarArchivo = 0;
 
+String rutaDeArchivoDescarga = {};
+AsyncWebServerRequest *requestNuevo;
 
 
 String clienteEntrante = {};

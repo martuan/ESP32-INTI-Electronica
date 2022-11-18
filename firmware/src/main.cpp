@@ -1,7 +1,7 @@
 /*  
  *
  *	Programado por: Martín Cioffi, Martín Luna y Nestor Mariño
- *  Fecha: 18-10-2022
+ *  Fecha: 07-11-2022
  *
  *	Version 1
  *  
@@ -61,7 +61,7 @@
 #include <ESPmDNS.h>
 #include <AsyncTCP.h>
 //	#include "SPIFFS.h"
-
+#include "esp_task_wdt.h"
 
 #include <SdFat.h>
 #include <Wire.h>
@@ -129,6 +129,7 @@ void armarPaqueteHtml(String);
 void reconnectWifi(void);
 void IRAM_ATTR onTimer0();
 void notFound(AsyncWebServerRequest *request);
+void downloadAllFromDirectory(SdFile path, AsyncWebServerRequest *);
 
 // ********** Funciones del controlador ***************
 
@@ -160,6 +161,7 @@ void fallaEscrituraSD(void);
 void leerSerie(void);
 String rutinaInicioEnsayo(void);
 void rutinaEnsayo(String nombreArchivo);
+ArRequestHandlerFunction handlerRoot(void);
 
 // HTML web page to handle 3 input fields (input1, input2, input3)
 const char index_html[] PROGMEM = R"rawliteral(
@@ -179,7 +181,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 	li a:hover{background-color:#EAE3EA;border-radius:0.375em;font-size:85%}
 	section {font-size:0.88em;}
 	h1{color:white;border-radius:0.5em;font-size:1em;padding:0.2em 0.2em;background:#558ED5;}
-	h2{color:orange;font-size:1.0em;}
+	h2{color:blue;font-size:1.0em;}
 	h3{font-size:0.8em;}
 	table{font-family:arial,sans-serif;font-size:0.9em;border-collapse:collapse;width:85%;} 
 	th,td {border:0.06em solid #dddddd;text-align:center;padding:0.3em;border-bottom:0.06em solid #dddddd;} 
@@ -205,13 +207,15 @@ const char index_html[] PROGMEM = R"rawliteral(
 
 
 <title>INTI - Caucho</title>
-<body><table><tr><td><h1>ESP32 Datalogger Webserver - INTI</h1></td>
+<body><table><tr><td><h1>ESP32 Datalogger Webserver - INTI</h1></td></tr>
 
+<tr><td>
 <form action='/login' method='post' accept-charset='utf-8'>
 <label for='user'><b>Usuario: </b></label><input type='text' name='user' id='user' value=''>
 <label for='pass'><b>Password: </b></label><input type='password' name='pass' id='pass' value=''>
 <input type='Submit' value='Aceptar'>
 </form>
+</td></tr></table>
 </body></html>
 )rawliteral";
 
@@ -232,7 +236,7 @@ const char menu_html[] PROGMEM = R"rawliteral(
 	li a:hover{background-color:#EAE3EA;border-radius:0.375em;font-size:85%}
 	section {font-size:0.88em;}
 	h1{color:white;border-radius:0.5em;font-size:1em;padding:0.2em 0.2em;background:#558ED5;}
-	h2{color:orange;font-size:1.0em;}
+	h2{color:blue;font-size:1.0em;}
 	h3{font-size:0.8em;}
 	table{font-family:arial,sans-serif;font-size:0.9em;border-collapse:collapse;width:85%;} 
 	th,td {border:0.06em solid #dddddd;text-align:center;padding:0.3em;border-bottom:0.06em solid #dddddd;} 
@@ -258,12 +262,16 @@ const char menu_html[] PROGMEM = R"rawliteral(
 
 
 <title>INTI - Caucho</title>
-<body><table><tr><td><h1>Menu</h1></td></tr></table>
-
+<body><table><tr><td colspan='2'><h1>Menu</h1></td></tr>
+<tr>
+<td>
 <form action='/dir' method='post' accept-charset='utf-8'><input type='hidden' name='directorio' id='root' value='/'><input type='Submit' value='Listado de archivos'></form>
-<br>
+</td>
+<td>
 <form action='/logout' method='post' accept-charset='utf-8'><input type='hidden' name='logout' id='logout' value='/'><input type='Submit' value='Logout'></form>
-
+</td>
+</tr>
+</table>
 
 </body></html>
 )rawliteral";
@@ -285,7 +293,7 @@ const char listSD_start_html[] PROGMEM = R"rawliteral(
 	li a:hover{background-color:#EAE3EA;border-radius:0.375em;font-size:85%}
 	section {font-size:0.88em;}
 	h1{color:white;border-radius:0.5em;font-size:1em;padding:0.2em 0.2em;background:#558ED5;}
-	h2{color:orange;font-size:1.0em;}
+	h2{color:blue;font-size:1.0em;}
 	h3{font-size:0.8em;}
 	table{font-family:arial,sans-serif;font-size:0.9em;border-collapse:collapse;width:85%;} 
 	th,td {border:0.06em solid #dddddd;text-align:center;padding:0.3em;border-bottom:0.06em solid #dddddd;} 
@@ -348,7 +356,7 @@ const char html_root[] PROGMEM = R"rawliteral(
 	li a:hover{background-color:#EAE3EA;border-radius:0.375em;font-size:85%}
 	section {font-size:0.88em;}
 	h1{color:white;border-radius:0.5em;font-size:1em;padding:0.2em 0.2em;background:#558ED5;}
-	h2{color:orange;font-size:1.0em;}
+	h2{color:blue;font-size:1.0em;}
 	h3{font-size:0.8em;}
 	table{font-family:arial,sans-serif;font-size:0.9em;border-collapse:collapse;width:85%;} 
 	th,td {border:0.06em solid #dddddd;text-align:center;padding:0.3em;border-bottom:0.06em solid #dddddd;} 
@@ -481,6 +489,11 @@ void setup(void){
 
 	// Send web page with input fields to client
 
+	//server.on("/", HTTP_GET, handlerRoot);
+
+
+
+
 	server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
 		if (!logueado) { //si no hay usuario logueado envía página de login
 			request->send_P(200, "text/html", index_html);
@@ -488,10 +501,10 @@ void setup(void){
 		
 			if ((request->client()->remoteIP()) == IPlogueada) { //ip entrante ip logueada son iguales
 				if (timeOutweb) { //hubo timeout de web
-				request->redirect("/logout");  //redirecciona a "/logout"
+					request->redirect("/logout");  //redirecciona a "/logout"
 				}
 				else {
-				request->redirect("/menu");  //redirecciona a "/menu"
+					request->redirect("/menu");  //redirecciona a "/menu"
 				}
 			}
 			else {
@@ -678,6 +691,58 @@ void setup(void){
 						"<br><a href=\"/logout\">Desconectarse de la Web</a>");
 	*/
 	});
+
+	server.on("/downloadall", HTTP_ANY, [] (AsyncWebServerRequest *request) {
+
+		Serial.print("Solicitud HTTP desde IP: ");    
+		//Serial.println(inputIP);
+		Serial.println(request->client()->remoteIP());
+		Serial.println(logueado);
+
+
+
+		if (request->hasArg("downloadall")){
+			Serial.println("Se bajarán todos los archivos del directorio");
+
+			root.open(pathDirectory.c_str());
+			root.rewindDirectory();
+			//downloadAllFromDirectory(root, request);
+			
+			AsyncWebServerResponse *response = request->beginResponse(200, "text/html", "My file contents");
+			
+			response->addHeader("Accept-Encoding", "gzip");
+			response->addHeader("Content-Disposition","attachment; filename=\"file.gzip\"");
+			request->send(response);
+
+			AsyncWebServerResponse *response2 = request->beginResponse(200, "text/plain", "My file contents");
+			response2->addHeader("Content-Disposition","attachment; filename=\"file22222.txt\"");
+			request->send(response2);
+			
+			//request->send(response);
+			//request->send(response);
+			
+			/*
+			SD_file_download("/Ensayos/OT_223-0008/Lote_5002/20220606T110888.csv", request);
+			SD_file_download("/Ensayos/OT_223-0008/Lote_5002/20220606T110888.csv", request);
+			SD_file_download("/Ensayos/OT_223-0008/Lote_5002/20220606T110888.csv", request);
+			SD_file_download("/Ensayos/OT_223-0008/Lote_5002/20220606T110888.csv", request);
+			SD_file_download("/Ensayos/OT_223-0008/Lote_5002/20220606T110888.csv", request);
+			*/
+			root.close();
+			//Serial.println(request->getParam(0)->value());
+			//SD_file_download(request->getParam(0)->value(), request);
+
+		} 
+		//request->send(SPIFFS, "/file.html", "text/html", true);
+
+	/*
+		//logueado = 0;
+		request->send(200, "text/html", "Solicitud HTTP desde IP: "
+							+ (request->client()->remoteIP()).toString() +
+							"<br><a href=\"/\">Retornar a Menu Principal</a>"
+						"<br><a href=\"/logout\">Desconectarse de la Web</a>");
+	*/
+	});
 	
 	
 	server.onNotFound(notFound);  //rutina de atención de páginas web solicitadas y no definidas
@@ -747,6 +812,16 @@ void setup(void){
 }
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void loop(void){
+
+
+
+	if(flagDescargarArchivo){
+		Serial.println("flagDescargarArchivo = 1");
+		
+		SD_file_download(rutaDeArchivoDescarga, requestNuevo);
+		flagDescargarArchivo = 0;
+	}
+	//requestNuevo->send(200, "text/html", paquete_html.c_str());
 
 /*
 	//inicio del bloque de control (es temporario), no queda en versión definitiva
@@ -832,6 +907,8 @@ void SD_file_download(String filename, AsyncWebServerRequest *request){
 		Serial.println();
 		
 		request->send(download2, filename.c_str(), "text/html", true);
+		//delay(5000);
+		//request->send(download2, filename.c_str(), "text/html", true);
 		/*
 		server.sendHeader("Content-Type", "text/text");
 		server.sendHeader("Content-Disposition", "attachment; filename="+filename);
@@ -854,6 +931,22 @@ void listar_SD_dir(String param1, String param2, AsyncWebServerRequest *request)
 	param1 = request->getParam(0)->value();
 
 	Serial.println(param1);
+
+	if (request->hasArg("MarcarTodo")){
+		String marcarTodo = {};
+
+		marcarTodo = request->getParam(0)->value();
+		Serial.print("marcar todo = ");
+		Serial.println(marcarTodo);
+		
+		if(marcarTodo == "si"){
+			flagMarcarTodo = 1;
+		}else if(marcarTodo == "no"){
+			flagMarcarTodo = 0;
+		}
+		
+	}
+	
 
 	Serial.println("***********************************");
 	Serial.print("pathDirectory antes de verificar usuario logueado = ");
@@ -908,16 +1001,18 @@ void listar_SD_dir(String param1, String param2, AsyncWebServerRequest *request)
 			if (root) {
 				root.rewindDirectory();
 
-				webpage += F("<h3 class='rcorners_m'>Contenido de la memoria SD</h3><br>");
-				webpage += F("<form action='/logout' method='post' accept-charset='utf-8'><input type='hidden' name='logout' id='logout' value='/'><input type='Submit' value='Logout'></form>");
+				//webpage += F("<h3 class='rcorners_m'>Contenido de la memoria SD</h3><br>");
+				webpage += F("<table><tr><td><h2 class='rcorners_m'>Contenido de la memoria SD</h2></td><td><form action='/logout' method='post' accept-charset='utf-8'><input type='hidden' name='logout' id='logout' value='/'><input type='Submit' value='Logout'></form></td></tr></table>");
+				//webpage += F("<form action='/logout' method='post' accept-charset='utf-8'><input type='hidden' name='logout' id='logout' value='/'><input type='Submit' value='Logout'></form>");
 				
-				webpage += F("<form action='/consultarPorFecha'><label for='Fecha'>Fecha: </label><input type='date' id='fechaEnsayo' name='fechaEnsayo'><input type='submit'></form><br>");
+				//webpage += F("<form action='/consultarPorFecha'><label for='Fecha'>Fecha: </label><input type='date' id='fechaEnsayo' name='fechaEnsayo'><input type='submit'></form><br>");
 
-				webpage += "<h3 align = 'left'>Directorio actual = "+ pathDirectory + "</h3>";
+				webpage += "<h2 style='color:blue;' align = 'left'>Directorio actual = "+ pathDirectory + "</h2>";
 
 				webpage += F("<table class='table table-striped'>");
-				webpage += F("<tr><th scope='col'>Nombre</th><th scope='col'>Fecha</th><th scope='col'>Archivo/Directorio</th><th scope='col'>Tama&ntildeo</th><th scope='col'>Eliminar</th><th scope='col'>Descargar</th></tr>");
-				webpage += "<tr><td><form action='/dir' method='post' accept-charset='utf-8'><input type='hidden' name='directorioAtras' id='directorioAtras' value='../'><input type='Submit' value='../'></form></td><td></td><td></td><td></td><td align='center'></td><td></td></tr>";
+				//webpage += F("<tr><th scope='col'>Nombre</th><th scope='col'>Fecha</th><th scope='col'>Archivo/Directorio</th><th scope='col'>Tama&ntildeo</th><th scope='col'>Descargar</th><td><form action='#' method='post' accept-charset='utf-8'><input type='hidden' name='MarcarTodo' value='si'><input type='Submit' value='Marcar Todo'></form></td><td><form action='#' method='post' accept-charset='utf-8'><input type='hidden' name='MarcarTodo' value='no'><input type='Submit' value='Desmarcar Todo'></form></td><td><form action='/downloadall' method='post' accept-charset='utf-8'><input type='hidden' name='downloadall' value='si'><input type='Submit' value='Descargar Todo'></form></td></tr>");
+				webpage += F("<tr><th scope='col'>Nombre</th><th scope='col'>Fecha</th><th scope='col'>Archivo/Directorio</th><th scope='col'>Tama&ntildeo</th><th scope='col'>Descargar</th></tr>");
+				webpage += "<tr><td><form action='/dir' method='post' accept-charset='utf-8'><input type='hidden' name='directorioAtras' id='directorioAtras' value='../'><input type='Submit' value='../'></form></td><td></td><td></td><td></td><td align='center'></td></tr>";
 
 				printDirectory_v5(root);
 
@@ -980,7 +1075,7 @@ void printDirectory_v5(SdFile path){
 			rutaDeArchivo = String(entryName);
 			
 			//webpage += "<tr><td><form action='/dir' method='post' accept-charset='utf-8'><input type='hidden' name='directorio' id='directorio' value="+ String(rutaDeArchivo) +"><input type='hidden' name='cuenta' id='cuenta' value='"+ String(cuenta) +"'><input type='Submit' value='"+String(rutaDeArchivo)+"'></form></td><td></td><td>"+String(entry.isDirectory()?"Dir":"File")+"</td><td></td><td align='center'></td><td></td></tr>";
-			webpage += "<tr><td><form action='/dir' method='post' accept-charset='utf-8'><input type='hidden' name='directorio' value='"+ String(rutaDeArchivo) +"'><input type='hidden' name='cuenta' id='cuenta' value='"+ String(cuenta) +"'><input type='Submit' value='"+String(rutaDeArchivo)+"'></form></td><td></td><td>"+String(entry.isDirectory()?"Dir":"File")+"</td><td></td><td align='center'></td><td></td></tr>";
+			webpage += "<tr><td><form action='/dir' method='post' accept-charset='utf-8'><input type='hidden' name='directorio' value='"+ String(rutaDeArchivo) +"'><input type='hidden' name='cuenta' id='cuenta' value='"+ String(cuenta) +"'><input type='Submit' value='"+String(rutaDeArchivo)+"'></form></td><td></td><td>"+String(entry.isDirectory()?"Dir":"File")+"</td><td></td><td></td></tr>";
 
 
 			
@@ -1016,6 +1111,63 @@ void printDirectory_v5(SdFile path){
 		entry.close();
 	}
 }
+
+void downloadAllFromDirectory(SdFile path, AsyncWebServerRequest *request){
+
+	char entryName[100] = {};
+	String nombreDeArchivo = {};
+	String rutaDeArchivo = {};
+	bool hayMasArchivos = 0;
+	String dirNuevo = {};
+	Serial.println("----------------Entra al downloadAllFromDirectory-----------------------");
+	Serial.print("pathDirectory = ");
+	Serial.println(pathDirectory);
+	String fechaNormalizada = {};
+
+	while(entry.openNext(&path, O_RDONLY)){
+
+		/*
+		if (webpage.length() > 1000) {
+			SendHTML_Content();
+		}
+*/
+		entry.getName(entryName, 100);//obtiene el nombre de la entrada, ya sea un directorio o un archivo
+		
+		if(entry.isDirectory()){//Si es un directorio
+			
+			rutaDeArchivo = String(entryName);
+						
+		}
+		else//Si es un archivo
+		{
+			
+			nombreDeArchivo = String(entryName);
+			//rutaDeArchivo = rutaDeArchivo + "/" + nombreDeArchivo;
+			rutaDeArchivo = pathDirectory + nombreDeArchivo;
+			rutaDeArchivoDescarga = pathDirectory + nombreDeArchivo;
+			filename = nombreDeArchivo;
+			Serial.println(filename);
+
+			if(filename.endsWith(".csv")){
+				Serial.println("termina con .csv");
+			}
+			
+			flagDescargarArchivo = 1;
+			//esp_task_wdt_reset();
+
+			//SD_file_download(rutaDeArchivo, request);
+//			delay(2000);			
+			//esp_task_wdt_reset();
+			
+					
+		}
+		//SD_file_download(rutaDeArchivo, request);
+		entry.close();
+		
+	}
+	
+}
+
 /*
 void File_Delete(){
 
@@ -1676,10 +1828,23 @@ void agregaFilaEnTabla(String nombreDeArchivo, String fechaNormalizada, String r
 	else if(bytes < (1024 * 1024 * 1024)) fsize = String(bytes/1024.0/1024.0,3)+" MB";
 	else                                  fsize = String(bytes/1024.0/1024.0/1024.0,3)+" GB";
 
-	webpage += "<td>"+fsize+"</td><td><form action='/delete' method='post' accept-charset='utf-8'><input type='text' hidden name='lname' value='"+String(rutaDeArchivo)+"'><input type='submit' name='delete' value='Borrar'></form></td>";
+	webpage += "<td>"+fsize+"</td></form></td>";
 	Serial.print("		Archivo a descargar = ");
 	Serial.print(rutaDeArchivo);
+	/*
+	if(flagMarcarTodo == 1){
+
+		webpage += "<td><form action='/download' method='post' accept-charset='utf-8'><input type='text' hidden name='lname' value='"+String(rutaDeArchivo)+"'><input type='submit' name='download' value='Descargar'><td><input type='checkbox' name='ch1' checked/> Archivo</td></form></td>";
+
+	}else{
+
+		webpage += "<td><form action='/download' method='post' accept-charset='utf-8'><input type='text' hidden name='lname' value='"+String(rutaDeArchivo)+"'><input type='submit' name='download' value='Descargar'><td><input type='checkbox' name='ch1' /> Opcion 1</td></form></td>";
+
+	}
+	*/
+
 	webpage += "<td><form action='/download' method='post' accept-charset='utf-8'><input type='text' hidden name='lname' value='"+String(rutaDeArchivo)+"'><input type='submit' name='download' value='Descargar'></form></td>";
+		
 	Serial.print("\t");
 	Serial.println(String(fsize));
 
@@ -1865,3 +2030,26 @@ void IRAM_ATTR onTimer0() //rutina de atención del timer (se ejecuta cada 1 seg
     }
   }
 }
+
+
+ArRequestHandlerFunction handlerRoot(void){
+	
+	AsyncWebServerRequest *request;
+		if (!logueado) { //si no hay usuario logueado envía página de login
+			request->send_P(200, "text/html", index_html);
+		}else{ //hay otro usuario logueado
+		
+			if ((request->client()->remoteIP()) == IPlogueada) { //ip entrante ip logueada son iguales
+				if (timeOutweb) { //hubo timeout de web
+				request->redirect("/logout");  //redirecciona a "/logout"
+				}
+				else {
+				request->redirect("/menu");  //redirecciona a "/menu"
+				}
+			}
+			else {
+				request->send_P(200, "text/html","Servidor web ocupado...<br><a href=\"/\">Retornar a pantalla inicio</a>"); //servidor atendiendo otra IP
+			}
+		}
+  }
+
