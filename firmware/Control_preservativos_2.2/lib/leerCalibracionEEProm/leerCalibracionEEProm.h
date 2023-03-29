@@ -12,7 +12,7 @@ class leerCalibracionEEProm   {
     public:
         leerCalibracionEEProm(LiquidCrystal_I2C objeto1LCD);
 //        boolean verificarCalibracion(void);     //Verifica la calibración del sensor de presión en el preservativo
-        void verificarCalibracion(void);     //Verifica la calibración del sensor de presión en el preservativo
+        boolean verificarCalibracion(void);     //Verifica la calibración del sensor de presión en el preservativo
       //  void mensajeLCD(void);
 
     private:

@@ -26,6 +26,7 @@
  Enviando "leerArchivo:<Nombre de Archivo>" devuelve el contenido del archivo (UTF-8). Si el archivo esta dentro de un subdirectorio especificar ruta. Ej.: "leerArchivo:/20220601/20220601T083911.csv" 
  Enviando "leerSubDir:<Nombre de directorio>" devuelve el contenido del directorio. Ej.: Enviando "leerSubDir:/20220601" devuelve el contenido dentro del directorio /20220601
 */
+//Definiciones para el Timer 0--------------------------------------------------------
 #define TIMER_0 0
 #define FREC_CLOCK_CPU 80000000  //En Hz
 #define PRESCALER_T0  80 //Prescales para timer 0.
@@ -34,10 +35,16 @@
 //#define CUENTA_T0 1000000 //en microsegundos.
 #define CUENTA_T0 (FREC_CLOCK_CPU / (PRESCALER_T0 * FREC_T0)) //en microsegundos.
 #define timeOut 30
+//Definiciones para el Timer 1--------------------------------------------------------
+#define TIMER_1 1
+#define FREC_CLOCK_CPU 80000000  //En Hz
+#define PRESCALER_T1  80 //Prescales para timer 0.
+#define CUENTA_T1 12000 //12mseg (en microsegundos.)
 
 #include <Wire.h>
 #include <RTClib.h>
 RTC_DS3231 rtc;
+
 #include <SPI.h>
 #include <SD.h>
 #include <LiquidCrystal_I2C.h>
@@ -57,8 +64,8 @@ PCF pcf;      //Maneja el I2C para el teclado 4x4
 #include "leerCalibracionEEProm.h"
 #include "teclado4x4.h"
 #include "defines.h"
+#include "definesComm.h"
 //#include "parser.cpp"
-
 
 tiempoCumplido tiempoCumplido1(100);    //Usado para saber cuando escribir lecturas en la SD
 leerEEPROM leerEEPROM1(addressEEPROM_1kPa_1, addressEEPROM_2kPa_2);
@@ -74,10 +81,15 @@ tiempoCumplido tiempoCumplido2(1);    //Usado para llamar a la lectura del tecla
 teclado4x4 teclado1(pcf);             //Teclado 4x4 conectado al I2C a travez delPCF8574
 calibrarSensor calibrarSensores1(lcd1);
 //leerPuertoSerie 
+
 //*** Timer
 hw_timer_t * timer0 = NULL;
-boolean flagEntroTimer = false;  
+boolean flagEntroTimer0 = false;  
+void IRAM_ATTR onTimer0();
 //int finEnsayoSinRuptura(int segundos, String lineaMedicion, String nombreDirectorioArchivo,String directorioArchivoOT,  boolean suspenderEnsayo){
+hw_timer_t *timer1 = NULL; //Puntero para configurar el timer.
+boolean flagEntroTimer1 = false;  
+void IRAM_ATTR onTimer1();
 
 ///************
 //Rutina que crea en archivo de registro de nuevo ensayo, lo nombra según formato ISO8601 y Escribe dentro de el el encabezado del ensayo
@@ -90,14 +102,60 @@ extern boolean flagEnsayoEnCurso;
 extern boolean  suspenderEnsayo;
 extern boolean flagCalibracionEnCurso;
 
+//********* Variables para el controlador de caudal por comunicación serie "Comm"
+extern unsigned char inParserComm;			// dato de entrada al parser
+extern unsigned char estadoActualComm; 	// estado del parser
+extern void ParserComm(void);
+void IniParserComm(void);
+extern unsigned char timeOutCounterComm; //Contador para el time out de comunicación.
+extern unsigned char timeOutCaudCounter; //Contador para el time out de comandos de medición.
 
+extern bool llamaParserComm;
+extern unsigned char codigoErrorComm;		// 0 = Sin Error; 1 = Reint_WCM; 2 = VerifWCM; 3 = Reint_SP; 4 = VerifSP; 5 = reintCaudal; 6 = caudalRec 									
+extern boolean errorSetUpCaudal;
+extern boolean llamarMPPAL;
+
+//extern unsigned char estadoActualComm;
+
+void ConfigCallback();
+
+void esperarCalentamientoSensor(void);
 //***************************************************************
 void fallaEscrituraSD(void);
-void IRAM_ATTR onTimer0();
 //****************************************************************************************
 void IRAM_ATTR onTimer0() {
-  flagEntroTimer = true;
- 
+  flagEntroTimer0 = true;
+
+//  digitalWrite(LED_PORT, !digitalRead(LED_PORT)); //DEBUG
+  if ( timeOutCounterComm != 0)
+    if(--timeOutCounterComm == 0)
+    {
+  //    inParserComm = TIMEOUT;
+      llamaParserComm = true;  
+    } 
+}
+//***************************************************************************************
+void IRAM_ATTR onTimer1()
+{
+  static unsigned int i=0;
+    if(i==200){
+      i=0;
+      flagEntroTimer1 = true;
+    }
+    i++;
+   //TimeOut para los comandos de medición.--------------
+  if ( timeOutCaudCounter != 0){
+         //    Serial.print("Entro al if Valor de timeOutCaudCounter: ");
+         //        Serial.println(timeOutCaudCounter);
+    if(--timeOutCaudCounter == 0)
+    {
+//      inParserComm = TIMEOUTCAUD;
+      inParserComm = MEDIR;
+      llamaParserComm = true; 
+    //  flagEntroTimer1 = true;
+          //  Serial.println("Entro en timeOutCaudCounter de onTimmer1");
+    }
+  }
 }
 //***************************************************************************************
 void setup() {
@@ -112,6 +170,7 @@ void setup() {
  // int flagCalibracion;
   boolean memoriaSDinicializada = false;
   boolean datosCalibracionOk;
+  char letraLeida = 'z';
   //********************************************
   // Open serial communications and wait for port to open:
   Serial.begin(115200);
@@ -147,20 +206,64 @@ void setup() {
   dht.begin();    //Inicializar sensor de temperatura
   EEPROM.begin(EEPROM_SIZE);
   
-  leerCalibracion1.verificarCalibracion();
+  calibracion = leerCalibracion1.verificarCalibracion();
   
   pcf.setup(addresspcf8574_KeyPad);        
 //  pcf.write(0B11111111);  // Turns all pins/ports HIGH
 
+  //Configuración del Timer 0 ----------------------------------------------------
   timer0 = timerBegin(TIMER_0, PRESCALER_T0, true); // timer utilizado; Prescaler; cuenta ascendente= TRUE.
   timerAttachInterrupt(timer0, &onTimer0, true); // Asigna la rutina de atención de ingterrupción
                                                   // al timer0 . Activa por flanco.
   timerAlarmWrite(timer0, CUENTA_T0, true); //Carga la cuenta del timer, Autorrecarga.
   timerAlarmEnable(timer0); //Habilita la interrupción del timer.
+  
+//Configuración del Timer 1 ----------------------------------------------------
+  timer1 = timerBegin(TIMER_1, PRESCALER_T1, true); // timer utilizado; Prescaler; cuenta ascendente= TRUE.
+  timerAttachInterrupt(timer1, &onTimer1, true); // Asigna la rutina de atención de interrupción
+                                                  // al timer1 . Activa por flanco.
+  timerAlarmWrite(timer1, CUENTA_T1, true); //Carga la cuenta del timer, Autorrecarga.
+  //timerAlarmEnable(timer1); //Habilita la interrupción del timer.
+  timerAlarmDisable(timer1);
+//**************************************************************************
 
+//******** Serial Comm 2
+  //Configuración del UART para configuración del Controlador-----------------------------------
+  Serial2.begin(38400,SERIAL_8N1,RX2,TX2);
+  //Serial2.onReceive(Serial2_callback);
+  Serial2.setRxTimeout(3); //3 símbolos de Time OUT.
+  Serial2.onReceive(ConfigCallback);
+  //----------------------------------------------------------------------------------------
+  esperarCalentamientoSensor();
+//********************************************************************
   IniParser();
+  
+  if(calibracion == false){
+      //Parser();
+      inParser = '9';
+      Parser();
+      inParser = 'A';
+      Parser();
+      Serial.print("estado en setup: ");
+      Serial.println(estadoActual);
+  }
+  llamaParserComm = true;
+  IniParserComm();
+
 }
 //********Fin Setup***************************************************************************
+void esperarCalentamientoSensor(){  //El sensor del controlador de caudal requiere requiere esperar al menos 30 seg. luego de energizado
+int segundos = 2;                   //para que el sensor alcance estabilidad térmica y mida con un error inferior al 2%. Luego de 5 minutos el error garantizado es inferior al 1% 
+  imprimirLcd1.limpiarLCD();
+  imprimirLcd1.imprimirLCDfijo("Esperar inicio del",0, 1);
+  imprimirLcd1.imprimirLCDfijo("Sensor",0, 2);
+  while(segundos>0){
+   imprimirLcd1.imprimirLCDfijo(String(segundos),8, 3);
+   segundos--;
+   delay(1000);
+  }
+
+}
 
 void imprimirPC(DateTime now, float temp, float humed){
       char dateTime[22];
@@ -213,10 +316,11 @@ float obtenerPresion1(void){
 }
 //***********************************************************************************
 void fallaEscrituraSD(){
-  imprimirLcd1.imprimirLCDfijo("                    ",0, 0);
+  imprimirLcd1.limpiarLCD();
+//  imprimirLcd1.imprimirLCDfijo("                    ",0, 0);
   imprimirLcd1.imprimirLCDfijo(" Falla Escritura SD ",0, 1);
-  imprimirLcd1.imprimirLCDfijo("                    ",0, 2);
-  imprimirLcd1.imprimirLCDfijo("                    ",0, 3);
+//  imprimirLcd1.imprimirLCDfijo("                    ",0, 2);
+//  imprimirLcd1.imprimirLCDfijo("                    ",0, 3);
 }
 //***********************************************************************************
 //segundos = finEnsayoSinRuptura(segundos,lineaMedicion, lineaMedicionNombreArchivo, nombreDirectorioArchivo, directorioArchivoOT);
@@ -363,7 +467,7 @@ boolean rutinaEnsayo(String nombreDirectorioArchivo){
   digitalWrite(electrovalvulaFuelle, HIGH);
   valorAD_fuelle = analogRead(sensorPresion2);                                                            
   if(valorAD_fuelle < valorAD_minimo_fuelle){
-      if(flagEntroTimer)  esperaFuelle++;
+      if(flagEntroTimer0)  esperaFuelle++;
       if(esperaFuelle > 5){
         segundos =  timeOut + 1; 
         imprimirLcd1.imprimirLCDfijo("Falla de Fuelle    ",0, 2);        
@@ -378,7 +482,7 @@ boolean rutinaEnsayo(String nombreDirectorioArchivo){
 
 //  delay(200);
     lineaMedicion = "";
-    if(flagEntroTimer && fuelleOK){
+    if(flagEntroTimer0 && fuelleOK){
         presion1 = obtenerPresion1();            //Se obtiene la presión en el preservativo
         presion1PartEntera = int(presion1);      //sprintf no formatea float, entonces separo partes entera y decimal
         presion1Partdecimal = int((presion1 - presion1PartEntera) * 100);
@@ -396,7 +500,7 @@ boolean rutinaEnsayo(String nombreDirectorioArchivo){
         lineaMedicionLCD = "";
   //      registrarDatos = tiempoCumplido1.calcularTiempo(true);
         guardarLineaMedicionAnterior = true;
-        flagEntroTimer =false;
+        flagEntroTimer0 =false;
         segundos ++;
 
         if(presion1 > 0.1)  { superoPresionMinima = true; }
@@ -440,7 +544,7 @@ boolean rutinaEnsayo(String nombreDirectorioArchivo){
   if(segundos >= timeOut){
     digitalWrite(electrovalvulaPresrevativo, LOW);
     digitalWrite(electrovalvulaFuelle, LOW);
-    flagEntroTimer =false;
+    flagEntroTimer0 =false;
     segundos = 0;
     lineaMedicionAnterior = "";  //Para no guardar en Maquina_1.csv el valor de presión durante loa caída. Interesa guardar la máxima antes del reventado
     ensayoEnCurso = false;
@@ -596,6 +700,72 @@ void funcionCalibrar(char letraLeida){
       if(enCalibracion) calibrarSensores1.calibrar(letraLeida);  
 }
 //****************************************************************************************
+void mensajeErrorLCD(void){
+  imprimirLcd1.limpiarLCD();
+
+    imprimirLcd1.imprimirLCDfijo("ERROR",7, 0);
+    imprimirLcd1.imprimirLCDfijo("Presione O (C)",5, 3);
+
+  if(codigoErrorComm == 1){
+    imprimirLcd1.imprimirLCDfijo("Reint_WCM",5, 1);
+  }
+  if(codigoErrorComm == 2){
+    imprimirLcd1.imprimirLCDfijo("VerifWCM",5, 1);
+  }
+  if(codigoErrorComm == 3){
+    imprimirLcd1.imprimirLCDfijo("Reint_SP",5, 1);
+  }
+  if(codigoErrorComm == 4){
+    imprimirLcd1.imprimirLCDfijo("Verif_SP",5, 1);
+  }
+  if(codigoErrorComm == 5){
+    imprimirLcd1.imprimirLCDfijo("reintCaudal",5, 1);
+  }
+  if(codigoErrorComm == 6){
+    imprimirLcd1.imprimirLCDfijo("CaudalRec",5, 1);
+  }
+
+}
+
+ boolean controlCaudal(char letraLeida, boolean ensayoEnCursoAux){
+  boolean ensayoEnCurso;
+  ensayoEnCurso = ensayoEnCursoAux;   //Si viene False conserva estado, si viene true cambia a false si hay error en medición de caudal.
+   if (llamaParserComm)
+  {
+      Serial.print("Estado Eactual Comm: ");
+      Serial.println(estadoActualComm);
+  //    Serial.print("Estado inParserComm: ");
+  //    Serial.println(inParserComm);
+    llamaParserComm = false;
+    ParserComm(); //LLama al parser
+   }
+    
+  while( estadoActualComm & MASKINESTABLE ){//Si el estado actual es inestable, llama al parser.
+    estadoActualComm = estadoActualComm & ~MASKINESTABLE; //Quita posible inestabilidad.
+    ParserComm();
+  }
+
+  if(errorSetUpCaudal == true){
+    mensajeErrorLCD();
+      Serial.println("Entro en errorSetUpCaudal");
+    errorSetUpCaudal = false;
+    ensayoEnCurso = false;
+  } 
+  if(estadoActualComm == MENSAJE_ERROR_LCD){       // 11 = MENSAJE_ERROR_LCD
+      if(letraLeida == 'O'){        //'O' es 'C' en teclado
+        estadoActual =  M_PPAL;
+        IniParserComm();
+        llamaParserComm = true;
+        Serial.println("Presiono 'O'");
+        imprimirLcd1.limpiarLCD();
+        imprimirLcd1.imprimirLCDfijo("REINTENTANDO",3, 2);
+        delay(1500);
+
+      }   
+  }
+  return(ensayoEnCurso);
+}
+//*****************************************************************************************
 void loop() {
 
   boolean calibracion;
@@ -603,21 +773,16 @@ void loop() {
   static String nombreDirectorioArchivo = "";
   boolean estadoPulsadorInicio, consultarTeclado, inicio;
   static boolean ensayoEnCurso = false;
- static boolean  permiteTerminarPorTeclado = false;
+  boolean ensayoEnCursoAux = false;
+  static boolean  permiteTerminarPorTeclado = false;
   char letraLeida = 'z';
   static int i = 0;
   String stringEstadoActual = "";
 
   while (Serial.available() > 0) {    // Es para lectura del puerto serie
-  leerSerie();
-  
+  leerSerie(); 
   }
- /*  inicio = digitalRead(pulsadorInicio);
-   if(inicio == LOW){
-   }
-  calibracion = digitalRead(pulsadorCalibracion); */
- // if(!calibracion)  calibracionSensoresPresion();
-         
+
   consultarTeclado = tiempoCumplido2.calcularTiempo(false);
   if(consultarTeclado){
     letraLeida = leerTeclado();
@@ -625,17 +790,16 @@ void loop() {
     if(letraLeida != 'z'){
       //inParser = Serial.read();
       inParser = letraLeida;
-      Parser(); //LLama al parser
-      Serial.print("Estado actual: ");
-//      stringEstadoActual = String(estadoActual);
-      Serial.println(estadoActual);
-          
-//      if(estadoActual == 4) suspenderEnsayo = false;
+      if(estadoActualComm >= WAIT_MED){ 
+        Parser(); //LLama al parser
+      }
+
     }
   } 
 
   if(flagEnsayoEnCurso == true){
- // 	Serial.println("Entro al If flagEnsayoEnCurso");
+    timerAlarmEnable(timer1); //Habilita la interrupción del timer1.
+
    nombreDirectorioArchivo = rutinaInicioEnsayo();
    ensayoEnCurso = true;
 //  	Serial.println("Puso ensayoEnCurso = T");
@@ -645,9 +809,10 @@ void loop() {
   if(ensayoEnCurso){
     ensayoEnCurso = rutinaEnsayo(nombreDirectorioArchivo); 
 //    permiteTerminarPorTeclado = true;
-    if(!ensayoEnCurso){   
+    if((!ensayoEnCurso) && (estadoActualComm != MENSAJE_ERROR_LCD)){   
       inParser = TERMINADO;
       Parser();
+      timerAlarmDisable(timer1); //Habilita la interrupción del timer1.
     }
    }
 
@@ -655,13 +820,52 @@ void loop() {
       funcionCalibrar(letraLeida);    
    } 
 
- while( estadoActual & MASKINESTABLE ){
+  while( estadoActual & MASKINESTABLE ){
 //    Serial.println("Es inestable ");
     estadoActual = estadoActual & ~MASKINESTABLE; //Quita posible inestabilidad.
 //    Serial.println(estadoActual);
 	  Parser();       //Si el estado actual es inestable, llama al parser.  
-//    Serial.println(estadoActual);
-//    delay(800);
+  }
+  ensayoEnCursoAux = ensayoEnCurso;
+  ensayoEnCurso = controlCaudal(letraLeida, ensayoEnCursoAux);
+  /*if (llamaParserComm)
+  {
+      Serial.print("Estado Eactual Comm: ");
+      Serial.println(estadoActualComm);
+      Serial.print("Estado inParserComm: ");
+      Serial.println(inParserComm);
+  
+    llamaParserComm = false;
+    ParserComm(); //LLama al parser
+   }
+    
+  while( estadoActualComm & MASKINESTABLE ){//Si el estado actual es inestable, llama al parser.
+    estadoActualComm = estadoActualComm & ~MASKINESTABLE; //Quita posible inestabilidad.
+    ParserComm();
+  }
+
+  if(errorSetUpCaudal == true){
+    mensajeErrorLCD();
+      Serial.println("Entro en errorSetUpCaudal");
+    errorSetUpCaudal = false;
+    ensayoEnCurso = false;
+  } 
+  if(estadoActualComm == MENSAJE_ERROR_LCD){       // 11 = MENSAJE_ERROR_LCD
+      if(letraLeida == 'O'){        //'O' es 'C' en teclado
+        estadoActual =  M_PPAL;
+        IniParserComm();
+        llamaParserComm = true;
+        Serial.println("Presiono 'O'");
+        imprimirLcd1.limpiarLCD();
+        imprimirLcd1.imprimirLCDfijo("REINTENTANDO",3, 2);
+        delay(1500);
+
+      }   
+  }*/
+  if(llamarMPPAL){    //Necesario para que aparezca el menu principal porque la máquina de estados del controlador de caudal
+    IniParser();      //imprime pantalla de error hasta que logra el setUp del controlador y pasa al estado waitMed
+    Parser();         //poniendo llamarMPPAL = true en la función AWaitMed()
+    llamarMPPAL = false;
   }
 
 }

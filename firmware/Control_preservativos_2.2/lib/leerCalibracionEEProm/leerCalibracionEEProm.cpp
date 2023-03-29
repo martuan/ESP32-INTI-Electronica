@@ -11,7 +11,7 @@ leerCalibracionEEProm::leerCalibracionEEProm(LiquidCrystal_I2C objeto1LCD){
 
 //*************************************************************************
 //boolean leerCalibracionEEProm::verificarCalibracion(void){  
-void leerCalibracionEEProm::verificarCalibracion(void){  
+boolean leerCalibracionEEProm::verificarCalibracion(void){  
   int ultimaLecturaEEPROM = 10;
   int address = 0;
   int b, m;
@@ -43,7 +43,7 @@ void leerCalibracionEEProm::verificarCalibracion(void){
 
     if(checkSumEEProm1 == checkSum){    //Verifica el checksum de la calibración del sensor de presión en preservativo 
         checkSumOK_1 = true;
-        Serial.println("CheckSum: Valido ");
+        Serial.println("CheckSum1: Valido ");
     } 
     else{
         checkSumOK_1 = false;         //checkSumOK_1 queda en false para forzar el restart y verifique si se corrigió
@@ -60,11 +60,12 @@ void leerCalibracionEEProm::verificarCalibracion(void){
       checkSumOK_fuelle = this->leerCalibracionEEProm::verificarCalibracionSensorFuelle();
       if(checkSumOK_fuelle == false){
         checkSumOK_1 = false;
+        Serial.println("CheckSum2: Invalido");
          this->leerCalibracionEEProm::mensajeLCD(); 
       }    
     }
        
-    //return(checkSumOK_1);
+    return(checkSumOK_1);
 }
 //********************************************************************************************
 boolean leerCalibracionEEProm::verificarCalibracionTalba2(void){
@@ -176,6 +177,7 @@ boolean leerCalibracionEEProm::verificarCalibracionTalba2(void){
     checkSumOK_2 = false;
     }else{
       checkSumOK_2 = true;
+      Serial.println("CheckSum2: Valido ");
     }
     return(checkSumOK_2);
   }
@@ -200,11 +202,10 @@ void leerCalibracionEEProm::mensajeLCD(void){
       imprimirLcd2.imprimirLCDfijo("No se puede corregir",0, 0);
       imprimirLcd2.imprimirLCDfijo("calibracion         ",0, 1);
       imprimirLcd2.imprimirLCDfijo("     CALIBRAR       ",0, 2);
-      while(true){
+     /* while(true){
         calibracion = digitalRead(pulsadorCalibracion);
         if(!calibracion)  // calibrarSensores1.calibrar();
-        delay(100);
-      }    
+        ;*/
+      }   
+      delay(3000);
     }     
- // }
-}

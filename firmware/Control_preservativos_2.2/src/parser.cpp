@@ -47,12 +47,12 @@ unsigned char nroOT[CANTDIGITOS+1]; //Array que contiene el nro de OT actual en 
 unsigned char lineaVacia[] = "                    ";
 unsigned char msgAaceptar[] = " A - Aceptar        ";
 unsigned char msgBvolver[] = " B - Volver         ";
-unsigned char msgINTICaucho[] = "   INTI - CAUCHO  ";
+unsigned char msgINTICaucho[] = "   INTI - CAUCHO    ";
 
 // variables para el parser ------------------------------------------------------
 unsigned char inParser;			// dato de entrada al parser
 unsigned char estadoActual; 	// estado del parser
-unsigned char estadoAnterior;	// utilizado para los casos en que se 
+//unsigned char estadoAnterior;	// utilizado para los casos en que se 
 								// necesita saber de donde viene.
 boolean flagEnsayoEnCurso;
 boolean flagCalibracionEnCurso;

@@ -33,4 +33,19 @@
 #define M_CALIBRACION	9
 #define CALIBRANDO		10		//Calibración en curso
 
+//*** Comunicación Serie
+// Estados posibles --------------------------------------------------------------
+#define INICIAL			0
+#define WR_CONTROL_MODE	1
+#define VERIF_WCM    	INESTABLE(2)
+#define WR_SETPOINT	 	3
+#define VERIF_SP	   	INESTABLE(4)
+#define REINT_WCM		INESTABLE(5)
+#define REINT_SP		INESTABLE(6)
+#define WAIT_MED		7
+#define CAUDAL			8
+#define REINT_CAUDAL	INESTABLE(9)
+#define CAUDAL_REC		INESTABLE(10)
+#define MENSAJE_ERROR_LCD 11
+
 #endif
