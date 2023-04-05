@@ -15,7 +15,7 @@
 #define ERROR_GENERAL 0xfc
 #define TIMEOUT 0xfb
 #define MEDIR  0xfa
-#define TIMEOUTCAUD 0xf9
+#define TIMEOUTCAUD 0x32	//0x32 = 50
 //Definiciones de los errores de comunicación
 #define SIN_ERROR 0
 #define ERROR_Reint_WCM 1

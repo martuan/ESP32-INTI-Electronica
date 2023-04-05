@@ -19,8 +19,8 @@
  Este archivo se guarda en la raiz. Cada máquina de ensayos tendrá su número
 
  Comandos Puerto Serie:
- Se puede setear el reloj de tiempo real (RTC) desde el puerto serie (115200 baud, 8 bits, sin paridad, un stop bit. Enviar setRTC:año mes dia hora minutos segundos (todo junto sin espacios)
- Ej.:Comando por puero serie: setRTC:20210213163218  -> año:2021, mes: 02, día: 13, hora: 16, minutos: 32, segundos: 18
+ Se puede setear el reloj de tiempo real (RTC) desde el puerto serie (115200 baud, 8 bits, sin paridad, un stop bit. Enviar setRTC:año mes dia hora minutos cantMediosSegundos (todo junto sin espacios)
+ Ej.:Comando por puero serie: setRTC:20210213163218  -> año:2021, mes: 02, día: 13, hora: 16, minutos: 32, cantMediosSegundos: 18
  
  Enviando "leerDir:" devuelve el directorio Raiz de la SD.
  Enviando "leerArchivo:<Nombre de Archivo>" devuelve el contenido del archivo (UTF-8). Si el archivo esta dentro de un subdirectorio especificar ruta. Ej.: "leerArchivo:/20220601/20220601T083911.csv" 
@@ -31,15 +31,15 @@
 #define FREC_CLOCK_CPU 80000000  //En Hz
 #define PRESCALER_T0  80 //Prescales para timer 0.
 //timer speed (Hz) = Timer clock speed (Mhz) / prescaler
-#define FREC_T0 1 //En Hz 
-//#define CUENTA_T0 1000000 //en microsegundos.
-#define CUENTA_T0 (FREC_CLOCK_CPU / (PRESCALER_T0 * FREC_T0)) //en microsegundos.
-#define timeOut 30
+#define FREC_T0 2 //En Hz 
+//#define CUENTA_T0 1000000 //en microcantMediosSegundos.
+#define CUENTA_T0 (FREC_CLOCK_CPU / (PRESCALER_T0 * FREC_T0)) //en microcantMediosSegundos.
 //Definiciones para el Timer 1--------------------------------------------------------
 #define TIMER_1 1
-#define FREC_CLOCK_CPU 80000000  //En Hz
-#define PRESCALER_T1  80 //Prescales para timer 0.
-#define CUENTA_T1 12000 //12mseg (en microsegundos.)
+#define PRESCALER_T1  80 //Prescales para timer 1.
+#define CUENTA_T1 10000 //10mseg (en microcantMediosSegundos.)
+
+#define timeOut 20    //Cantidad de segundos 
 
 #include <Wire.h>
 #include <RTClib.h>
@@ -86,12 +86,16 @@ calibrarSensor calibrarSensores1(lcd1);
 hw_timer_t * timer0 = NULL;
 boolean flagEntroTimer0 = false;  
 void IRAM_ATTR onTimer0();
-//int finEnsayoSinRuptura(int segundos, String lineaMedicion, String nombreDirectorioArchivo,String directorioArchivoOT,  boolean suspenderEnsayo){
+//int finEnsayoSinRuptura(int cantMediosSegundos, String lineaMedicion, String nombreDirectorioArchivo,String directorioArchivoOT,  boolean suspenderEnsayo){
 hw_timer_t *timer1 = NULL; //Puntero para configurar el timer.
-boolean flagEntroTimer1 = false;  
+//boolean flagEntroTimer1 = false;  
 void IRAM_ATTR onTimer1();
 
-///************
+boolean flagResetVolumen = false; //Para que GuardaMed() en ParserComm.cpp ponga volumen acumulado en cero al inicio del ensayo
+boolean flagResetRespArray = false;
+float segundosAcumulados;
+bool flagContabilizarVolumenes;
+//**************************************/
 //Rutina que crea en archivo de registro de nuevo ensayo, lo nombra según formato ISO8601 y Escribe dentro de el el encabezado del ensayo
 //********* Maquna de estados -> menues en display
 extern unsigned char inParser;			// dato de entrada al parser
@@ -109,14 +113,18 @@ extern void ParserComm(void);
 void IniParserComm(void);
 extern unsigned char timeOutCounterComm; //Contador para el time out de comunicación.
 extern unsigned char timeOutCaudCounter; //Contador para el time out de comandos de medición.
+//extern static unsigned int cantVecesGuardaMed;	 //Sirve como contador de tiempo para calcular volumen acumulado en GuardarMed()
 
 extern bool llamaParserComm;
 extern unsigned char codigoErrorComm;		// 0 = Sin Error; 1 = Reint_WCM; 2 = VerifWCM; 3 = Reint_SP; 4 = VerifSP; 5 = reintCaudal; 6 = caudalRec 									
 extern boolean errorSetUpCaudal;
 extern boolean llamarMPPAL;
-
-//extern unsigned char estadoActualComm;
-
+extern float sumatoriaCaudalesMedidos;;
+//extern unsigned int caudalValorDigitalDecimal;
+extern bool flagInicializarpreviousMillis;
+extern float volumenParcial;
+extern 	float segundosTranscurridos;
+extern bool flagCalculoVolumenParcial;
 void ConfigCallback();
 
 void esperarCalentamientoSensor(void);
@@ -137,12 +145,12 @@ void IRAM_ATTR onTimer0() {
 //***************************************************************************************
 void IRAM_ATTR onTimer1()
 {
-  static unsigned int i=0;
+ /* static unsigned int i=0;
     if(i==200){
       i=0;
       flagEntroTimer1 = true;
     }
-    i++;
+    i++;*/
    //TimeOut para los comandos de medición.--------------
   if ( timeOutCaudCounter != 0){
          //    Serial.print("Entro al if Valor de timeOutCaudCounter: ");
@@ -152,7 +160,7 @@ void IRAM_ATTR onTimer1()
 //      inParserComm = TIMEOUTCAUD;
       inParserComm = MEDIR;
       llamaParserComm = true; 
-    //  flagEntroTimer1 = true;
+      //cantVecesGuardaMed++;	
           //  Serial.println("Entro en timeOutCaudCounter de onTimmer1");
     }
   }
@@ -249,17 +257,18 @@ void setup() {
   }
   llamaParserComm = true;
   IniParserComm();
+  flagInicializarpreviousMillis = false;
 
 }
 //********Fin Setup***************************************************************************
 void esperarCalentamientoSensor(){  //El sensor del controlador de caudal requiere requiere esperar al menos 30 seg. luego de energizado
-int segundos = 2;                   //para que el sensor alcance estabilidad térmica y mida con un error inferior al 2%. Luego de 5 minutos el error garantizado es inferior al 1% 
+int cantMediosSegundos = 2;                   //para que el sensor alcance estabilidad térmica y mida con un error inferior al 2%. Luego de 5 minutos el error garantizado es inferior al 1% 
   imprimirLcd1.limpiarLCD();
   imprimirLcd1.imprimirLCDfijo("Esperar inicio del",0, 1);
   imprimirLcd1.imprimirLCDfijo("Sensor",0, 2);
-  while(segundos>0){
-   imprimirLcd1.imprimirLCDfijo(String(segundos),8, 3);
-   segundos--;
+  while(cantMediosSegundos>0){
+   imprimirLcd1.imprimirLCDfijo(String(cantMediosSegundos),8, 3);
+   cantMediosSegundos--;
    delay(1000);
   }
 
@@ -323,11 +332,9 @@ void fallaEscrituraSD(){
 //  imprimirLcd1.imprimirLCDfijo("                    ",0, 3);
 }
 //***********************************************************************************
-//segundos = finEnsayoSinRuptura(segundos,lineaMedicion, lineaMedicionNombreArchivo, nombreDirectorioArchivo, directorioArchivoOT);
-//  int finEnsayoSinRuptura(int segundos, String lineaMedicion, String nombreDirectorioArchivo,String directorioArchivoOT,  boolean suspenderEnsayo){
-int finEnsayoSinRuptura(int segundos, String lineaMedicion, String nombreDirectorioArchivo,String directorioArchivoOT){
-//int finEnsayoSinRuptura(int segundos, String lineaMedicionAnterior, String lineaMedicionNombreArchivo,String nombreArchivo,String nombreMaquina){
-  //boolean inicio = HIGH;            //Para verificar s se presionó el pulsador INICIO durante el ensayo y detener el mismo (parada de emergencia)
+void finEnsayoSinRuptura( String lineaMedicion, String nombreDirectorioArchivo,String directorioArchivoOT){
+//int finEnsayoSinRuptura(int cantMediosSegundos, String lineaMedicion, String nombreDirectorioArchivo,String directorioArchivoOT){
+ //boolean inicio = HIGH;            //Para verificar s se presionó el pulsador INICIO durante el ensayo y detener el mismo (parada de emergencia)
   static int valorAD_minimo_fuelle;
   static int valorAD_maximo_fuelle;
   int valorAD_fuelle = 0;
@@ -345,14 +352,16 @@ int finEnsayoSinRuptura(int segundos, String lineaMedicion, String nombreDirecto
   escribeUltimaMedicion += ", ";
   escribeUltimaMedicion += lineaMedicion;
   escribeUltimaMedicion += ", ";
-  if(segundos < 2){                                             //Para que lea los valores una vez por ensayo
+//  if(cantMediosSegundos < 2){                                             //Para que lea los valores una vez por ensayo
+  if(segundosAcumulados < 2){                                             //Para que lea los valores una vez por ensayo
   valorAD_minimo_fuelle = EEPROM.readInt(addressEEPROM_1kPa_1); //Valor de presión mínimo (en entero del AD) en el fuelle (sensor de presión 2)   
   valorAD_maximo_fuelle = EEPROM.readInt(addressEEPROM_2kPa_1); //Valor de presión máximo (en entero del AD) en el fuelle (sensor de presión 2) 
-      Serial.print("Valor Presión maximo fuelle: ");
-      Serial.println(valorAD_maximo_fuelle);
+//      Serial.print("Valor Presión maximo fuelle: ");
+//      Serial.println(valorAD_maximo_fuelle);
   }
 
-   if(segundos == timeOut){
+//   if(cantMediosSegundos == timeOut){
+   if(segundosAcumulados >= timeOut){
 //      lineaMedicionLCD += lineaMedicion;
 //      lineaMedicionLCD +=  " Time Out";
 //      imprimirLcd1.imprimirMedicionLCD(String(lineaMedicionLCD), 2);
@@ -374,8 +383,8 @@ int finEnsayoSinRuptura(int segundos, String lineaMedicion, String nombreDirecto
       SD.remove(nombreDirectorioArchivo.c_str());
       //tarjetaSD1.remove(nombreDirectorioArchivo.c_str());
       Serial.println("Fin de ensayo por parada de usuario");
-  //    datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreMaquina.c_str(), lineaMedicionNombreArchivo.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
-      segundos = timeOut + 1;         //Para que salga del While
+      segundosAcumulados = timeOut + 1;
+      //cantMediosSegundos = timeOut + 1;         //Para que salga del While
       digitalWrite(electrovalvulaPresrevativo, LOW);
 //      imprimirLcd1.imprimirLCDfijo("Detenido por Usuario ",0, 1);
 //      imprimirLcd1.imprimirMedicionLCD("Fin por Usuario", 2);
@@ -383,7 +392,8 @@ int finEnsayoSinRuptura(int segundos, String lineaMedicion, String nombreDirecto
    }
 
     valorAD_fuelle = analogRead(sensorPresion2);
-    if(segundos > 2){                                                             
+    if(segundosAcumulados > 2){                                                             
+//    if(cantMediosSegundos > 2){                                                             
       if(valorAD_fuelle < valorAD_minimo_fuelle)   bajaPresionFuelle = HIGH;      //infla fuelle de sujeción
       if(valorAD_fuelle > valorAD_maximo_fuelle)   altaPresionFuelle = HIGH;      
     }
@@ -394,7 +404,8 @@ int finEnsayoSinRuptura(int segundos, String lineaMedicion, String nombreDirecto
       datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreDirectorioArchivo.c_str(), lineaMedicion.c_str());                 //Escribe última medición antes de reventado en archivo de este ensayo    
       Serial.println("Fin de ensayo por baja presión en fuelle");
       datoAnexadoEnSD = tarjetaSD1.appendFile(SD, directorioArchivoOT.c_str(), escribeUltimaMedicion.c_str());    //Escribe última medición antes de reventado en archivo Maquina_#
-      segundos = timeOut + 1;       //Para que salga del While
+      segundosAcumulados = timeOut + 1;
+//      cantMediosSegundos = timeOut + 1;       //Para que salga del While
       imprimirLcd1.imprimirLCDfijo("Baja Presion Fuelle ",0, 2);
 //      imprimirLcd1.imprimirMedicionLCD("Baja Presion Fuelle",2);
       delay(300);
@@ -408,23 +419,40 @@ int finEnsayoSinRuptura(int segundos, String lineaMedicion, String nombreDirecto
       Serial.println(valorAD_fuelle);
 
       datoAnexadoEnSD = tarjetaSD1.appendFile(SD, directorioArchivoOT.c_str(), escribeUltimaMedicion.c_str());  //Escribe última medición antes de reventado en archivo Maquina_#
-      segundos = timeOut + 1;       //Para que salga del While
+      segundosAcumulados = timeOut + 1;
+//      cantMediosSegundos = timeOut + 1;       //Para que salga del While
       imprimirLcd1.imprimirLCDfijo("Alta Presion Fuelle ",0, 2);
       //imprimirLcd1.imprimirMedicionLCD("Alta Presion Fuelle",2);
       //imprimirLCD("Alta Presion Fuelle",2);
       delay(300);
     }
-    return segundos;
+  //  return cantMediosSegundos;
 }
 //***********************************************************************************
-int obtenerVolumenAcumulado(void){
-    int volumen = 5;
-    return(volumen);
+String obtenerVolumenAcumulado(void){
+    //Se calcula en GuardarMed
+  static float volumenAcumuladoFloat;
+  
+  if(flagResetVolumen == true){ 
+    volumenAcumuladoFloat = 0;
+      flagResetVolumen = false; 
+  }
+  if(flagCalculoVolumenParcial == true){  volumenAcumuladoFloat += volumenParcial; }
+
+    String volumenAcumulado = "";
+    volumenAcumulado = String(volumenAcumuladoFloat, 2);
+	Serial.print("Volumen acumulado: ");
+	Serial.println(volumenAcumulado);//DEBUG
+//	Serial.print(" * cantMediosSegundos: ");
+//	Serial.println(cantMediosSegundos);//DEBUG
+  flagCalculoVolumenParcial = false;
+    return(volumenAcumulado);
 }
 //***********************************************************************************
 //boolean rutinaEnsayo(String nombreDirectorioArchivo,  boolean suspenderEnsayo){
 boolean rutinaEnsayo(String nombreDirectorioArchivo){
-  static int segundos = 0;
+//  static int cantMediosSegundos = 0;
+  int segundos, decimal;
   static String lineaMedicionAnterior = "";  //Para no guardar en Maquina_1.csv el valor de presión durante loa caída. Interesa guardar la máxima antes del reventado
     
   char medicionPresion[5];
@@ -448,7 +476,7 @@ boolean rutinaEnsayo(String nombreDirectorioArchivo){
   boolean ensayoEnCurso = true;
   static boolean fuelleOK = false;
   
-  int volumenAcumulado;
+  String volumenAcumulado;
   static char esperaFuelle = 0;
 
   static String directorioArchivoOT;
@@ -460,8 +488,8 @@ boolean rutinaEnsayo(String nombreDirectorioArchivo){
 //  Serial.printf("Archivo OT: ");
 //  Serial.println(directorioArchivoOT);
 //  if(suspenderEnsayo == true) timeOut + 1;
-
-  if(segundos < 1){
+  if(segundosAcumulados < 1){
+//  if(cantMediosSegundos < 1){
   valorAD_minimo_fuelle = EEPROM.readInt(addressEEPROM_1kPa_1); //Valor de presión mínimo (en entero del AD) en el fuelle (sensor de presión 2)   
   }                                             //Para que lea los valores una vez por ensayo
   digitalWrite(electrovalvulaFuelle, HIGH);
@@ -469,7 +497,8 @@ boolean rutinaEnsayo(String nombreDirectorioArchivo){
   if(valorAD_fuelle < valorAD_minimo_fuelle){
       if(flagEntroTimer0)  esperaFuelle++;
       if(esperaFuelle > 5){
-        segundos =  timeOut + 1; 
+      segundosAcumulados = timeOut + 1;  
+//        cantMediosSegundos =  timeOut + 1; 
         imprimirLcd1.imprimirLCDfijo("Falla de Fuelle    ",0, 2);        
       } 
     }else
@@ -488,20 +517,27 @@ boolean rutinaEnsayo(String nombreDirectorioArchivo){
         presion1Partdecimal = int((presion1 - presion1PartEntera) * 100);
         sprintf(medicionPresion, "%d.%02d", (int)presion1, presion1Partdecimal);
         volumenAcumulado = obtenerVolumenAcumulado();
-        lineaMedicion += String(segundos);
+        //Ahora se mide cada medio segundo
+//        segundos = cantMediosSegundos/2;
+//        decimal = cantMediosSegundos%2;
+//        if(decimal == 1)  decimal = 5;
+        /*lineaMedicion += String(segundos);
+        lineaMedicion += ".";
+        lineaMedicion += String(decimal);*/
+        lineaMedicion += String(segundosAcumulados, 1);
         lineaMedicion += ",  ";
         lineaMedicion += String(medicionPresion);
         lineaMedicion += ",  ";
-        lineaMedicion += String(volumenAcumulado);
+        lineaMedicion += volumenAcumulado;
         lineaMedicionLCD += lineaMedicion;
   
-//        segundos ++;
+//        cantMediosSegundos ++;
         if(estadoActual == 4) imprimirLcd1.imprimirMedicionLCD(String(lineaMedicionLCD), 2);
         lineaMedicionLCD = "";
   //      registrarDatos = tiempoCumplido1.calcularTiempo(true);
         guardarLineaMedicionAnterior = true;
         flagEntroTimer0 =false;
-        segundos ++;
+  //      cantMediosSegundos ++;
 
         if(presion1 > 0.1)  { superoPresionMinima = true; }
         if(superoPresionMinima == true){
@@ -517,13 +553,15 @@ boolean rutinaEnsayo(String nombreDirectorioArchivo){
                
               datoAnexadoEnSD = tarjetaSD1.appendFile(SD, directorioArchivoOT.c_str(), escribeUltimaMedicion.c_str());
               superoPresionMinima = false; 
-              segundos = timeOut + 1;       //No vuenve a entrar en  while(segundos < timeOut) ni entra en if(segundos == timeOut)
+  //            cantMediosSegundos = timeOut + 1;       //No vuenve a entrar en  while(cantMediosSegundos < timeOut) ni entra en if(cantMediosSegundos == timeOut)
+              segundosAcumulados = timeOut + 1;       //No vuenve a entrar en  while(cantMediosSegundos < timeOut) ni entra en if(cantMediosSegundos == timeOut)
           }else{
-//            segundos = finEnsayoSinRuptura(segundos,lineaMedicion, nombreDirectorioArchivo, directorioArchivoOT, suspenderEnsayo);
-            segundos = finEnsayoSinRuptura(segundos,lineaMedicion, nombreDirectorioArchivo, directorioArchivoOT);
+//            cantMediosSegundos = finEnsayoSinRuptura(cantMediosSegundos,lineaMedicion, nombreDirectorioArchivo, directorioArchivoOT, suspenderEnsayo);
+            finEnsayoSinRuptura(lineaMedicion, nombreDirectorioArchivo, directorioArchivoOT);
             lineaMedicion += ", \r\n";
 //            Serial.print(lineaMedicion);         //Si se quita el envío al puerto serie, agregar delay(10) para que escriba bien en la sd el fin de línea
-            if(segundos <= timeOut) datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreDirectorioArchivo.c_str(), lineaMedicion.c_str());   
+//            if(cantMediosSegundos <= timeOut) datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreDirectorioArchivo.c_str(), lineaMedicion.c_str());   
+            if(segundosAcumulados <= timeOut) datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreDirectorioArchivo.c_str(), lineaMedicion.c_str());   
           }    
         }
     
@@ -533,19 +571,20 @@ boolean rutinaEnsayo(String nombreDirectorioArchivo){
           lineaMedicionAnterior += lineaMedicion;
           guardarLineaMedicionAnterior = false;
         }
-//      segundos ++;
+//      cantMediosSegundos ++;
     }
     if(!datoAnexadoEnSD){
-      segundos = timeOut + 1;       //Para que salga del While  
+      segundosAcumulados = timeOut + 1;
+     // cantMediosSegundos = timeOut + 1;       //Para que salga del While  
       Serial.println("Fallo escritura SD ");
     fallaEscrituraSD();
     }
-  if(suspenderEnsayo == true) segundos = timeOut + 1;
-  if(segundos >= timeOut){
+  if(suspenderEnsayo == true) segundosAcumulados = timeOut + 1; //cantMediosSegundos = timeOut + 1;
+  if(segundosAcumulados >= timeOut){
     digitalWrite(electrovalvulaPresrevativo, LOW);
     digitalWrite(electrovalvulaFuelle, LOW);
     flagEntroTimer0 =false;
-    segundos = 0;
+  //  cantMediosSegundos = 0;
     lineaMedicionAnterior = "";  //Para no guardar en Maquina_1.csv el valor de presión durante loa caída. Interesa guardar la máxima antes del reventado
     ensayoEnCurso = false;
           inParser = 'B';       // Cambio de estado en Parser
@@ -630,8 +669,8 @@ void leerSerie(){
   char dateTimeChar[22];
         
   comando = Serial.readStringUntil(':');
-  if(comando == "setRTC"){              //Si recibe este String seguido por ":" por puerto serie seteará el RTC con la siguiente cadena año mes dia hora minutos segundos
-    dateTime = Serial.readString();     // Ej.:Comando por puero serie: setRTC:20210213163218  -> año:2021, mes: 02, día: 13, hora: 16, minutos: 32, segundos: 18
+  if(comando == "setRTC"){              //Si recibe este String seguido por ":" por puerto serie seteará el RTC con la siguiente cadena año mes dia hora minutos cantMediosSegundos
+    dateTime = Serial.readString();     // Ej.:Comando por puero serie: setRTC:20210213163218  -> año:2021, mes: 02, día: 13, hora: 16, minutos: 32, cantMediosSegundos: 18
     ano = dateTime.substring(0,4);
     mes = dateTime.substring(4,6);
     dia = dateTime.substring(6,8);
@@ -729,11 +768,15 @@ void mensajeErrorLCD(void){
 
  boolean controlCaudal(char letraLeida, boolean ensayoEnCursoAux){
   boolean ensayoEnCurso;
+   static int estadoActualAnterior;
   ensayoEnCurso = ensayoEnCursoAux;   //Si viene False conserva estado, si viene true cambia a false si hay error en medición de caudal.
    if (llamaParserComm)
   {
+    if(estadoActualAnterior != estadoActual){
       Serial.print("Estado Eactual Comm: ");
       Serial.println(estadoActualComm);
+      estadoActualAnterior = estadoActual;
+    }
   //    Serial.print("Estado inParserComm: ");
   //    Serial.println(inParserComm);
     llamaParserComm = false;
@@ -800,13 +843,19 @@ void loop() {
   if(flagEnsayoEnCurso == true){
     timerAlarmEnable(timer1); //Habilita la interrupción del timer1.
 
-   nombreDirectorioArchivo = rutinaInicioEnsayo();
-   ensayoEnCurso = true;
-//  	Serial.println("Puso ensayoEnCurso = T");
-   flagEnsayoEnCurso = false;
+    nombreDirectorioArchivo = rutinaInicioEnsayo();
+    ensayoEnCurso = true;
+  	Serial.println("Entro a flagEnsayo en curso");
+    flagEnsayoEnCurso = false;
+    flagResetRespArray = true;
+    flagResetVolumen = true;
+    flagInicializarpreviousMillis = true;
+    		segundosAcumulados = 0;
 
 }
-  if(ensayoEnCurso){
+  ensayoEnCursoAux = ensayoEnCurso;
+  ensayoEnCurso = controlCaudal(letraLeida, ensayoEnCursoAux);
+   if(ensayoEnCurso){
     ensayoEnCurso = rutinaEnsayo(nombreDirectorioArchivo); 
 //    permiteTerminarPorTeclado = true;
     if((!ensayoEnCurso) && (estadoActualComm != MENSAJE_ERROR_LCD)){   
@@ -814,6 +863,9 @@ void loop() {
       Parser();
       timerAlarmDisable(timer1); //Habilita la interrupción del timer1.
     }
+    flagContabilizarVolumenes = true;
+   }else{
+    flagContabilizarVolumenes = false;
    }
 
     if(flagCalibracionEnCurso){
@@ -826,42 +878,7 @@ void loop() {
 //    Serial.println(estadoActual);
 	  Parser();       //Si el estado actual es inestable, llama al parser.  
   }
-  ensayoEnCursoAux = ensayoEnCurso;
-  ensayoEnCurso = controlCaudal(letraLeida, ensayoEnCursoAux);
-  /*if (llamaParserComm)
-  {
-      Serial.print("Estado Eactual Comm: ");
-      Serial.println(estadoActualComm);
-      Serial.print("Estado inParserComm: ");
-      Serial.println(inParserComm);
-  
-    llamaParserComm = false;
-    ParserComm(); //LLama al parser
-   }
-    
-  while( estadoActualComm & MASKINESTABLE ){//Si el estado actual es inestable, llama al parser.
-    estadoActualComm = estadoActualComm & ~MASKINESTABLE; //Quita posible inestabilidad.
-    ParserComm();
-  }
 
-  if(errorSetUpCaudal == true){
-    mensajeErrorLCD();
-      Serial.println("Entro en errorSetUpCaudal");
-    errorSetUpCaudal = false;
-    ensayoEnCurso = false;
-  } 
-  if(estadoActualComm == MENSAJE_ERROR_LCD){       // 11 = MENSAJE_ERROR_LCD
-      if(letraLeida == 'O'){        //'O' es 'C' en teclado
-        estadoActual =  M_PPAL;
-        IniParserComm();
-        llamaParserComm = true;
-        Serial.println("Presiono 'O'");
-        imprimirLcd1.limpiarLCD();
-        imprimirLcd1.imprimirLCDfijo("REINTENTANDO",3, 2);
-        delay(1500);
-
-      }   
-  }*/
   if(llamarMPPAL){    //Necesario para que aparezca el menu principal porque la máquina de estados del controlador de caudal
     IniParser();      //imprime pantalla de error hasta que logra el setUp del controlador y pasa al estado waitMed
     Parser();         //poniendo llamarMPPAL = true en la función AWaitMed()

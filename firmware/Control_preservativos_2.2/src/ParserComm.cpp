@@ -18,9 +18,26 @@ unsigned char reintentos;
 unsigned char timeOutCounterComm; //Contador para el time out de comunicación.
 unsigned char timeOutCaudCounter; 	//Contador para el time out de comunicación para los comandos
 									//de configuración.
+static unsigned int cantVecesGuardaMed;									
 unsigned char codigoErrorComm;		// 0 = Sin Error; 1 = Reint_WCM; 2 = VerifWCM; 3 = Reint_SP; 4 = VerifSP; 5 = reintCaudal; 6 = caudalRec 									
 boolean errorSetUpCaudal;
 boolean llamarMPPAL;
+//extern boolean flagEnsayoEnCurso;
+extern boolean flagResetRespArray;
+unsigned int volumenParcialDigital = 0;	//Guarda el volumen en el último período medidi (medio segundo)
+//static unsigned int caudalValorDigitalDecimalAcumulado = 0;		//Utilizada en GuardaMed()
+float sumatoriaCaudalesMedidos;
+	
+unsigned long milisTranscurridos;
+bool flagInicializarpreviousMillis;
+static unsigned long previousMillis = 0;
+float volumenParcial;
+//float segundosTranscurridos;
+float segundosEntreMedicion;
+extern float segundosAcumulados;
+extern bool flagContabilizarVolumenes;
+bool flagCalculoVolumenParcial = true;
+
 //**************************************************************************
 //
 // Funciones para máquina de estados. (Parser)
@@ -63,8 +80,6 @@ void ParserComm(void)
 	(*ptrEstadoParserComm->Accion) (); 			//realiza acción
 }
 
-
-//
 // Nada()
 //
 void NadaComm(void)
@@ -79,7 +94,6 @@ void SendWriteControlMode(void)
 	timeOutCounterComm = TIME_OUT;
 	errorSetUpCaudal = true;
 }
-
 
 /*----------------------------------------------------------------------------------
 ConfigCallback()
@@ -187,15 +201,41 @@ void SendMedCaudal(void)
 	Serial2.println(":06800401210120"); // El println le agrega el \r\n al comando.
 	timeOutCaudCounter = TIMEOUTCAUD;//Activa TimeOut.
 	//digitalWrite(PINDEBUG,HIGH);//DEBUG
-	Serial.println("SendMedCaudal");//DEBUG
+//	Serial.println("SendMedCaudal");//DEBUG
+	if(flagResetRespArray == true){ 
+		flagResetRespArray = false;
+	//	cantVecesGuardaMed = 0;	
+//		segundosAcumulados = 0;
+		for(int i = 11; i < 15; i++){
+			RespArray[i] = '0';
+		}		
+		  	Serial.println("Entro a flagResetRespArray */*/*");
+	}
+
+	if(flagInicializarpreviousMillis){
+		previousMillis = millis();
+		flagInicializarpreviousMillis = false;
+		  	Serial.println("Entro a flagInicializarpreviousMillis ");
+	}	
 }
 
 void VerifCaudal(void)
 {
+	static unsigned long currentMillis;
+	
+	currentMillis = millis();
+
 	timeOutCaudCounter = 0;//Inhibe cuenta de TimeOut.
 	if( (RespArray[0] == ':') && (RespArray[15] == 0x0D) && (RespArray[16] == 0x0A ) ) //Trama OK.
 	{
 		inParserComm = SI;
+		milisTranscurridos = currentMillis - previousMillis;
+			/*Serial.print("currentMillis: ");
+			Serial.print(currentMillis);//DEBUG
+			Serial.print("     // previousMillis: ");
+			Serial.println(previousMillis);//DEBUG	*/		
+		previousMillis = currentMillis;
+
 	//	Serial.println("Lectura Correcta");//DEBUG 
 	}
 	else
@@ -208,33 +248,60 @@ void VerifCaudal(void)
 		} 
 	}
 	codigoErrorComm = 5;
-	Serial.println("VerifCaudal");//DEBUG
-//	Serial.print("Valor inParserComm: ");//DEBUG
-//		Serial.println(inParserComm);//DEBUG
+	//Serial.println("VerifCaudal");//DEBUG
+}
 
+unsigned int hexToDec(String hexString) {
+  
+  unsigned int decValue = 0;
+  int nextInt;
+  
+  for (int i = 0; i < hexString.length(); i++) {
+    
+    nextInt = int(hexString.charAt(i));
+    if (nextInt >= 48 && nextInt <= 57) nextInt = map(nextInt, 48, 57, 0, 9);
+    if (nextInt >= 65 && nextInt <= 70) nextInt = map(nextInt, 65, 70, 10, 15);
+    if (nextInt >= 97 && nextInt <= 102) nextInt = map(nextInt, 97, 102, 10, 15);
+    nextInt = constrain(nextInt, 0, 15);
+    
+    decValue = (decValue * 16) + nextInt;
+  }
+  
+  return decValue;
 }
 void GuardaMed(void)
 {
-//	unsigned long int caudalValorDigital = 0;
-	unsigned int caudalValorDigital = 0;
-	int mult =1;
-	//char RespArrayDato[4]; //Para almacenar la respuesta del controlador
-	//----------------------------------------------------
-	//Aquí se debe guardar la lectura RespArray[11] a RespArray[14] en una variable....
-	//-----------------------------------------------------
+	//En el caudalímetro: Rango: 0 - 40L/min (0 - 32000d)
+//	unsigned int caudalValorDigital = 0;
+	char caudalValorDigitalChar[4];
+	String caudalValorDigitalString = "";
+	unsigned int caudalValorDigital;
+	unsigned int volumenParcialDigitalInt;
+//	float segundosTranscurridos;
 
-	for(int i = 14; i > 10; i--){
-		//RespArrayDato[0] =	RespArray[i + 11];	
-		caudalValorDigital += (RespArray[i] - '0') * mult;
-		mult *= 10; // mult is used to get ones, tens, hundreds and thousands
+	//Aquí se debe guardar la lectura RespArray[11] a RespArray[14] en una variable....
+
+	for(int i = 11; i < 15; i++){
+		caudalValorDigitalChar[i - 11] = RespArray[i] ;
 	}
-	//caudalValorDigital = atoi(RespArrayDato);
+	caudalValorDigitalString = caudalValorDigitalChar;
+	caudalValorDigital = hexToDec(caudalValorDigitalString); 
+	      cantVecesGuardaMed++;
+	segundosEntreMedicion = float(milisTranscurridos)/1000;
+	if(flagContabilizarVolumenes == true){
+		volumenParcial =  (float(caudalValorDigital)/60)*segundosEntreMedicion/800;		// 32000/40 = 800;    Caudal máx: 40l/min = 32000 puntos(DAC)/min
+	}
+	segundosAcumulados += segundosEntreMedicion;
 	reintentos = 0;		//Reset de cantidad de reintentos.
 	inParserComm = MEDIR;
 	timeOutCaudCounter = TIMEOUTCAUD;//Activa TimeOut.
-	Serial.print("Caudal Valor digital: ");
-	Serial.println(caudalValorDigital);//DEBUG
-	
+	Serial.print(" segundosEntreMedicion: ");
+	Serial.print(segundosEntreMedicion);//DEBUG
+//	Serial.print("  * segundosAcumulados: ");
+//	Serial.println(segundosAcumulados);//DEBUG
+	Serial.print(" volumenParcial: ");
+	Serial.println(volumenParcial, 3);//DEBUG
+	flagCalculoVolumenParcial = true;
 }
 void ReintentoMed(void)
 {
