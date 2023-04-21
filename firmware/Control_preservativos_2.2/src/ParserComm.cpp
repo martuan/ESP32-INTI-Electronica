@@ -18,7 +18,7 @@ unsigned char reintentos;
 unsigned char timeOutCounterComm; //Contador para el time out de comunicación.
 unsigned char timeOutCaudCounter; 	//Contador para el time out de comunicación para los comandos
 									//de configuración.
-static unsigned int cantVecesGuardaMed;									
+//static unsigned int cantVecesGuardaMed;									
 unsigned char codigoErrorComm;		// 0 = Sin Error; 1 = Reint_WCM; 2 = VerifWCM; 3 = Reint_SP; 4 = VerifSP; 5 = reintCaudal; 6 = caudalRec 									
 boolean errorSetUpCaudal;
 boolean llamarMPPAL;
@@ -26,7 +26,7 @@ boolean llamarMPPAL;
 extern boolean flagResetRespArray;
 unsigned int volumenParcialDigital = 0;	//Guarda el volumen en el último período medidi (medio segundo)
 //static unsigned int caudalValorDigitalDecimalAcumulado = 0;		//Utilizada en GuardaMed()
-float sumatoriaCaudalesMedidos;
+//float sumatoriaCaudalesMedidos;
 	
 unsigned long milisTranscurridos;
 bool flagInicializarpreviousMillis;
@@ -204,8 +204,6 @@ void SendMedCaudal(void)
 //	Serial.println("SendMedCaudal");//DEBUG
 	if(flagResetRespArray == true){ 
 		flagResetRespArray = false;
-	//	cantVecesGuardaMed = 0;	
-//		segundosAcumulados = 0;
 		for(int i = 11; i < 15; i++){
 			RespArray[i] = '0';
 		}		
@@ -213,7 +211,7 @@ void SendMedCaudal(void)
 	}
 
 	if(flagInicializarpreviousMillis){
-		previousMillis = millis();
+		previousMillis = millis();			//Se inicializa previousMillis al inicio de cada ensayo. Durante el ensayo se actualiza en void VerifCaudal(void)
 		flagInicializarpreviousMillis = false;
 		  	Serial.println("Entro a flagInicializarpreviousMillis ");
 	}	
@@ -272,12 +270,10 @@ unsigned int hexToDec(String hexString) {
 void GuardaMed(void)
 {
 	//En el caudalímetro: Rango: 0 - 40L/min (0 - 32000d)
-//	unsigned int caudalValorDigital = 0;
 	char caudalValorDigitalChar[4];
 	String caudalValorDigitalString = "";
 	unsigned int caudalValorDigital;
 	unsigned int volumenParcialDigitalInt;
-//	float segundosTranscurridos;
 
 	//Aquí se debe guardar la lectura RespArray[11] a RespArray[14] en una variable....
 
@@ -286,7 +282,7 @@ void GuardaMed(void)
 	}
 	caudalValorDigitalString = caudalValorDigitalChar;
 	caudalValorDigital = hexToDec(caudalValorDigitalString); 
-	      cantVecesGuardaMed++;
+//	      cantVecesGuardaMed++;
 	segundosEntreMedicion = float(milisTranscurridos)/1000;
 	if(flagContabilizarVolumenes == true){
 		volumenParcial =  (float(caudalValorDigital)/60)*segundosEntreMedicion/800;		// 32000/40 = 800;    Caudal máx: 40l/min = 32000 puntos(DAC)/min
@@ -295,12 +291,12 @@ void GuardaMed(void)
 	reintentos = 0;		//Reset de cantidad de reintentos.
 	inParserComm = MEDIR;
 	timeOutCaudCounter = TIMEOUTCAUD;//Activa TimeOut.
-	Serial.print(" segundosEntreMedicion: ");
-	Serial.print(segundosEntreMedicion);//DEBUG
+//	Serial.print(" segundosEntreMedicion: ");
+//	Serial.print(segundosEntreMedicion);//DEBUG
 //	Serial.print("  * segundosAcumulados: ");
 //	Serial.println(segundosAcumulados);//DEBUG
-	Serial.print(" volumenParcial: ");
-	Serial.println(volumenParcial, 3);//DEBUG
+//	Serial.print(" volumenParcial: ");
+//	Serial.println(volumenParcial, 3);//DEBUG
 	flagCalculoVolumenParcial = true;
 }
 void ReintentoMed(void)

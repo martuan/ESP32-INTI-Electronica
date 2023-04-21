@@ -119,11 +119,11 @@ extern bool llamaParserComm;
 extern unsigned char codigoErrorComm;		// 0 = Sin Error; 1 = Reint_WCM; 2 = VerifWCM; 3 = Reint_SP; 4 = VerifSP; 5 = reintCaudal; 6 = caudalRec 									
 extern boolean errorSetUpCaudal;
 extern boolean llamarMPPAL;
-extern float sumatoriaCaudalesMedidos;;
+//extern float sumatoriaCaudalesMedidos;;
 //extern unsigned int caudalValorDigitalDecimal;
 extern bool flagInicializarpreviousMillis;
 extern float volumenParcial;
-extern 	float segundosTranscurridos;
+//extern 	float segundosTranscurridos;
 extern bool flagCalculoVolumenParcial;
 void ConfigCallback();
 
@@ -318,6 +318,8 @@ float obtenerPresion1(void){
   }
 
   presion1 = (float(lecturaAD1) - float(b))/float(m);
+      Serial.print("presion1 float: ");
+      Serial.println(presion1);
 
   if(presion1 < 0)  presion1 = 0;
 
@@ -766,11 +768,11 @@ void mensajeErrorLCD(void){
 
 }
 
- boolean controlCaudal(char letraLeida, boolean ensayoEnCursoAux){
+boolean controlCaudal(char letraLeida, boolean ensayoEnCursoAux){
   boolean ensayoEnCurso;
-   static int estadoActualAnterior;
+  static int estadoActualAnterior;
   ensayoEnCurso = ensayoEnCursoAux;   //Si viene False conserva estado, si viene true cambia a false si hay error en medición de caudal.
-   if (llamaParserComm)
+  if (llamaParserComm)
   {
     if(estadoActualAnterior != estadoActual){
       Serial.print("Estado Eactual Comm: ");
@@ -781,20 +783,25 @@ void mensajeErrorLCD(void){
   //    Serial.println(inParserComm);
     llamaParserComm = false;
     ParserComm(); //LLama al parser
-   }
-    
+  }  
   while( estadoActualComm & MASKINESTABLE ){//Si el estado actual es inestable, llama al parser.
     estadoActualComm = estadoActualComm & ~MASKINESTABLE; //Quita posible inestabilidad.
     ParserComm();
   }
-
   if(errorSetUpCaudal == true){
     mensajeErrorLCD();
-      Serial.println("Entro en errorSetUpCaudal");
+    Serial.println("Entro en errorSetUpCaudal");
     errorSetUpCaudal = false;
     ensayoEnCurso = false;
   } 
-  if(estadoActualComm == MENSAJE_ERROR_LCD){       // 11 = MENSAJE_ERROR_LCD
+ /* static int estadoActualCommAnterior = 0;
+  if(estadoActualComm != estadoActualCommAnterior){       // 11 = MENSAJE_ERROR_LCD
+    estadoActualCommAnterior = estadoActualComm;
+    Serial.print("EstadoActualComm: ");
+    Serial.println(estadoActualComm);
+  }*/
+//  if(estadoActualComm == MENSAJE_ERROR_LCD){       // 11 = MENSAJE_ERROR_LCD
+  if(estadoActualComm == WR_CONTROL_MODE){       // 1 = WR_CONTROL_MODE
       if(letraLeida == 'O'){        //'O' es 'C' en teclado
         estadoActual =  M_PPAL;
         IniParserComm();
@@ -803,7 +810,6 @@ void mensajeErrorLCD(void){
         imprimirLcd1.limpiarLCD();
         imprimirLcd1.imprimirLCDfijo("REINTENTANDO",3, 2);
         delay(1500);
-
       }   
   }
   return(ensayoEnCurso);
@@ -850,12 +856,11 @@ void loop() {
     flagResetRespArray = true;
     flagResetVolumen = true;
     flagInicializarpreviousMillis = true;
-    		segundosAcumulados = 0;
-
+    segundosAcumulados = 0;
 }
   ensayoEnCursoAux = ensayoEnCurso;
   ensayoEnCurso = controlCaudal(letraLeida, ensayoEnCursoAux);
-   if(ensayoEnCurso){
+  if(ensayoEnCurso){
     ensayoEnCurso = rutinaEnsayo(nombreDirectorioArchivo); 
 //    permiteTerminarPorTeclado = true;
     if((!ensayoEnCurso) && (estadoActualComm != MENSAJE_ERROR_LCD)){   
@@ -864,13 +869,13 @@ void loop() {
       timerAlarmDisable(timer1); //Habilita la interrupción del timer1.
     }
     flagContabilizarVolumenes = true;
-   }else{
+  }else{
     flagContabilizarVolumenes = false;
-   }
+  }
 
-    if(flagCalibracionEnCurso){
+  if(flagCalibracionEnCurso){
       funcionCalibrar(letraLeida);    
-   } 
+  } 
 
   while( estadoActual & MASKINESTABLE ){
 //    Serial.println("Es inestable ");
@@ -878,11 +883,9 @@ void loop() {
 //    Serial.println(estadoActual);
 	  Parser();       //Si el estado actual es inestable, llama al parser.  
   }
-
   if(llamarMPPAL){    //Necesario para que aparezca el menu principal porque la máquina de estados del controlador de caudal
     IniParser();      //imprime pantalla de error hasta que logra el setUp del controlador y pasa al estado waitMed
     Parser();         //poniendo llamarMPPAL = true en la función AWaitMed()
     llamarMPPAL = false;
   }
-
 }

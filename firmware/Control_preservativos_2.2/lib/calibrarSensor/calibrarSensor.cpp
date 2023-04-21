@@ -49,8 +49,10 @@
 
         if(letraLeidaAnterior != letraLeida){
           letraLeidaAnterior = letraLeida;
-          Serial.print("letra leida: ");
-          Serial.println(letraLeida);
+          if(letraLeida != 'z'){
+            Serial.print("letra leida: ");
+            Serial.println(letraLeida);
+          }
         }
         if(primerIngreso){
 //          imprimirLCDI2C imprimirLcd2(_objetoLCD);
@@ -83,36 +85,50 @@
             Serial.print(valorCalibracion[puntoCalibracion]);
             Serial.println("kPa  y presione #");
             Serial.print("Punto de calibración: ");
-            Serial.print(puntoCalibracion);
+            Serial.println(puntoCalibracion);
             imprimirLcd2.mensajeLCDcalibracion((muestraPorPunto + 1), valorCalibracion[puntoCalibracion]);
           }  
-          mensaje_1kPaCalibrado = true;       //Habilita el mensaje: "Suba a 2 kPa"
+          mensaje_1kPaCalibrado = true;       //Habilita el mensaje: "Suba a 2 kPa" Para el sensor 2 (Fuelle)
         } 
      delay(100);
-     //*******************************************************************
+    //*******************************************************************
      if((numeroSensor == 1) && habilitaCalibracion){
       if(letraLeida == '#'){
-       
+        delay(500);
         if(puntoCalibracion < 10){
           if(muestraPorPunto < cantMuestrasPorPunto){
             if((puntoCalibracion == 0) && (muestraPorPunto == 0)){
                 valorAcumulado = analogRead(sensorPresion1) + valorAcumulado;
                 promedio = valorAcumulado / 1;
-                if((muestraPorPunto +1) == cantMuestrasPorPunto){
+               /* if((muestraPorPunto +1) == cantMuestrasPorPunto){
                     puntoCalibracion ++;
-                }
-                imprimirLcd2.mensajeLCDcalibracion((muestraPorPunto + 1), valorCalibracion[puntoCalibracion]);
+ 
+                }*/
+              Serial.print(" -- Promedio: ");
+              Serial.println(promedio);
+
+            //Serial.print(muestraPorPunto + 1);
+              Serial.print("º. &--Desde Cero suba la presión hasta ");
+              Serial.print(valorCalibracion[puntoCalibracion + 1]);
+              Serial.println("&--kPa  y presione #");
+              Serial.print("&--Punto de calibración: ");
+              Serial.println(puntoCalibracion);
+                imprimirLcd2.mensajeLCDcalibracion((muestraPorPunto + 1), valorCalibracion[puntoCalibracion + 1]);  
                 muestraPorPunto ++;
             }else{
               valorAcumulado = analogRead(sensorPresion1) + valorAcumulado;
-              promedio = valorAcumulado / 1;
+              promedio = valorAcumulado / cantMuestrasPorPunto;
+//              promedio = valorAcumulado / 1;
               Serial.print(muestraPorPunto + 1);
               Serial.print("º. Desde Cero suba la presión hasta ");
-              Serial.print(valorCalibracion[puntoCalibracion]);
+              Serial.print(valorCalibracion[puntoCalibracion +1]);
               Serial.println("kPa  y presione #");
               Serial.print("Punto de calibración: ");
-              Serial.println(puntoCalibracion);
-              imprimirLcd2.mensajeLCDcalibracion((muestraPorPunto + 1), valorCalibracion[puntoCalibracion]);
+              Serial.println(puntoCalibracion + 1);
+              Serial.print(" Promedio: ");
+              Serial.println(promedio);
+
+              imprimirLcd2.mensajeLCDcalibracion((muestraPorPunto + 1), valorCalibracion[puntoCalibracion +1]);
               delay(100);
               muestraPorPunto ++;
             }
