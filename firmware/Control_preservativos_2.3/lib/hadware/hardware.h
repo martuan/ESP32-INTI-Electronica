@@ -11,7 +11,7 @@
 #define CS 5                   //Pin de Chip Select para escribir el SD
 #define pulsadorInicio 4       //Pulsador de inicio de ensayo. Parada durante el ensayo. Guardar valor durante calibración 
 #define electrovalvulaPresrevativo 25    //Activa electroválvula que permite paro de aire para inflado de preservativo
-#define electrovalvulaFuelle 26    //Activa electroválvula que infla el fuelle para sujetar el preservativo
+#define electrovalvulaFuelle 27    //Activa electroválvula que infla el fuelle para sujetar el preservativo
 #define EEPROM_SIZE 420 //Se usaran 20 enteros => 4by * 20    //Utilizado para guardar las constantes de calibración de los sensores de presión
                                                               //Sensor 1 , se guardan pendientes y ordenadas al origen (Se linealiza la curva en 10 segmentos)
                                                               //Sensor 2 , se guardan los valores digitales del AD correspondientes a 1kPa y 2kPa. Aqui solo interesa

@@ -1,5 +1,6 @@
 #include <Arduino.h>
-#include <SD.h>
+//#include <SD.h>
+#include <SdFat.h>
 #include "manejadorSD.h"
 
 String directorio1; //, directorio2, directorio3, directorio4;
@@ -122,7 +123,7 @@ void manejadorSD::listDir(fs::FS &fs, const char * dirname, uint8_t levels, bool
   }
       if(listEnArchivo){
         //if(borrarlistadoDirectorio)    
-//        SD.remove("/listadoDirectorio.txt");
+        //        SD.remove("/listadoDirectorio.txt");
 //        this->manejadorSD::listDirLCD(String(file.name()));
   //      this->manejadorSD::listDirArchivo();
         //borrarlistadoDirectorio = false;

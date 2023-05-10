@@ -39,14 +39,15 @@
 #define PRESCALER_T1  80 //Prescales para timer 1.
 #define CUENTA_T1 10000 //10mseg (en microcantMediosSegundos.)
 
-#define timeOut 20    //Cantidad de segundos 
+#define timeOut 40    //Cantidad de segundos 
 
 #include <Wire.h>
 #include <RTClib.h>
 RTC_DS3231 rtc;
 
 #include <SPI.h>
-#include <SD.h>
+//#include <SD.h>
+#include <SdFat.h>
 #include <LiquidCrystal_I2C.h>
 #include <Adafruit_Sensor.h>
 #include "DHT.h"
@@ -130,6 +131,8 @@ void ConfigCallback();
 void esperarCalentamientoSensor(void);
 //***************************************************************
 void fallaEscrituraSD(void);
+//****************************************************************************************
+void setUpWebServer(void);
 //****************************************************************************************
 void IRAM_ATTR onTimer0() {
   flagEntroTimer0 = true;
@@ -259,8 +262,13 @@ void setup() {
   IniParserComm();
   flagInicializarpreviousMillis = false;
 
+  setUpWebServer();
 }
 //********Fin Setup***************************************************************************
+void setUpWebServer(){
+
+}
+//*********************************************************************************************
 void esperarCalentamientoSensor(){  //El sensor del controlador de caudal requiere requiere esperar al menos 30 seg. luego de energizado
 int cantMediosSegundos = 2;                   //para que el sensor alcance estabilidad térmica y mida con un error inferior al 2%. Luego de 5 minutos el error garantizado es inferior al 1% 
   imprimirLcd1.limpiarLCD();
@@ -345,6 +353,7 @@ void finEnsayoSinRuptura( String lineaMedicion, String nombreDirectorioArchivo,S
   String lineaMedicionLCD = ""; 
   boolean datoAnexadoEnSD;
   String escribeUltimaMedicion = "";
+  static String nombreDirectorioArchivoAnterior= "";
 
 /*  Serial.println("Entro en finEnsayoSinRuptura");*/
    //   Serial.print("Valor suspenderEnsayo: ");
@@ -354,12 +363,13 @@ void finEnsayoSinRuptura( String lineaMedicion, String nombreDirectorioArchivo,S
   escribeUltimaMedicion += ", ";
   escribeUltimaMedicion += lineaMedicion;
   escribeUltimaMedicion += ", ";
-//  if(cantMediosSegundos < 2){                                             //Para que lea los valores una vez por ensayo
-  if(segundosAcumulados < 2){                                             //Para que lea los valores una vez por ensayo
-  valorAD_minimo_fuelle = EEPROM.readInt(addressEEPROM_1kPa_1); //Valor de presión mínimo (en entero del AD) en el fuelle (sensor de presión 2)   
-  valorAD_maximo_fuelle = EEPROM.readInt(addressEEPROM_2kPa_1); //Valor de presión máximo (en entero del AD) en el fuelle (sensor de presión 2) 
-//      Serial.print("Valor Presión maximo fuelle: ");
-//      Serial.println(valorAD_maximo_fuelle);
+ // if(segundosAcumulados < 2){                                             //Para que lea los valores una vez por ensayo
+  if(nombreDirectorioArchivoAnterior != nombreDirectorioArchivo){
+    valorAD_minimo_fuelle = EEPROM.readInt(addressEEPROM_1kPa_1); //Valor de presión mínimo (en entero del AD) en el fuelle (sensor de presión 2)   
+    valorAD_maximo_fuelle = EEPROM.readInt(addressEEPROM_2kPa_1); //Valor de presión máximo (en entero del AD) en el fuelle (sensor de presión 2) 
+      Serial.print("Valor Presión maximo fuelle inicial: ");
+      Serial.println(valorAD_maximo_fuelle);
+    nombreDirectorioArchivoAnterior = nombreDirectorioArchivo;   
   }
 
 //   if(cantMediosSegundos == timeOut){
@@ -419,6 +429,8 @@ void finEnsayoSinRuptura( String lineaMedicion, String nombreDirectorioArchivo,S
       Serial.println("Fin de ensayo por alta presión en fuelle");
       Serial.print("Presión en fuelle: ");
       Serial.println(valorAD_fuelle);
+      Serial.print("Valor Presión maximo fuelle: ");
+      Serial.println(valorAD_maximo_fuelle);
 
       datoAnexadoEnSD = tarjetaSD1.appendFile(SD, directorioArchivoOT.c_str(), escribeUltimaMedicion.c_str());  //Escribe última medición antes de reventado en archivo Maquina_#
       segundosAcumulados = timeOut + 1;
@@ -443,8 +455,8 @@ String obtenerVolumenAcumulado(void){
 
     String volumenAcumulado = "";
     volumenAcumulado = String(volumenAcumuladoFloat, 2);
-	Serial.print("Volumen acumulado: ");
-	Serial.println(volumenAcumulado);//DEBUG
+//	Serial.print("Volumen acumulado: ");
+//	Serial.println(volumenAcumulado);//DEBUG
 //	Serial.print(" * cantMediosSegundos: ");
 //	Serial.println(cantMediosSegundos);//DEBUG
   flagCalculoVolumenParcial = false;
@@ -541,7 +553,7 @@ boolean rutinaEnsayo(String nombreDirectorioArchivo){
         flagEntroTimer0 =false;
   //      cantMediosSegundos ++;
 
-        if(presion1 > 0.1)  { superoPresionMinima = true; }
+        if(presion1 > 0.15)  { superoPresionMinima = true; }
         if(superoPresionMinima == true){
           escribeUltimaMedicion += nombreDirectorioArchivo;
           escribeUltimaMedicion += ", ";
@@ -550,7 +562,8 @@ boolean rutinaEnsayo(String nombreDirectorioArchivo){
           if(presion1 < (presion1Anterior * 0.6)){       //Si la presión cae un 40% se asume que el preservativo reventó
             Serial.println("Entro a condicional caida 60% ");
       
-              escribeUltimaMedicion = escribeUltimaMedicion.substring(0,48);
+//              escribeUltimaMedicion = escribeUltimaMedicion.substring(0,48);
+              escribeUltimaMedicion = escribeUltimaMedicion.substring(0,54);
               escribeUltimaMedicion += ", Reventado \r\n";
                
               datoAnexadoEnSD = tarjetaSD1.appendFile(SD, directorioArchivoOT.c_str(), escribeUltimaMedicion.c_str());
@@ -563,7 +576,10 @@ boolean rutinaEnsayo(String nombreDirectorioArchivo){
             lineaMedicion += ", \r\n";
 //            Serial.print(lineaMedicion);         //Si se quita el envío al puerto serie, agregar delay(10) para que escriba bien en la sd el fin de línea
 //            if(cantMediosSegundos <= timeOut) datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreDirectorioArchivo.c_str(), lineaMedicion.c_str());   
-            if(segundosAcumulados <= timeOut) datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreDirectorioArchivo.c_str(), lineaMedicion.c_str());   
+            if(segundosAcumulados <= timeOut){
+              datoAnexadoEnSD = tarjetaSD1.appendFile(SD, nombreDirectorioArchivo.c_str(), lineaMedicion.c_str());   
+//              datoAnexadoEnSD = tarjetaSD1.appendFile(SD, directorioArchivoOT.c_str(), escribeUltimaMedicion.c_str());    //Escribe última medición antes de reventado en archivo de OT#
+            }
           }    
         }
     
@@ -672,7 +688,7 @@ void leerSerie(){
         
   comando = Serial.readStringUntil(':');
   if(comando == "setRTC"){              //Si recibe este String seguido por ":" por puerto serie seteará el RTC con la siguiente cadena año mes dia hora minutos cantMediosSegundos
-    dateTime = Serial.readString();     // Ej.:Comando por puero serie: setRTC:20210213163218  -> año:2021, mes: 02, día: 13, hora: 16, minutos: 32, cantMediosSegundos: 18
+    dateTime = Serial.readString();     // Ej.:Comando por puero serie: setRTC:20210213T163218  -> año:2021, mes: 02, día: 13, hora: 16, minutos: 32, cantMediosSegundos: 18
     ano = dateTime.substring(0,4);
     mes = dateTime.substring(4,6);
     dia = dateTime.substring(6,8);

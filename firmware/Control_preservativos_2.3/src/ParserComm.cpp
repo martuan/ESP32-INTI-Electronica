@@ -105,15 +105,22 @@ Levanta flag para que el main() llame al ParserComm.
 void ConfigCallback()
 {
   unsigned char i=0;
+ //  char debugRespArray[20];
+  String s = "";
 
   //Serial.println("ConfigCallback()");//DEBUG  
   while ( Serial2.available() )
   {
     RespArray[i] = Serial2.read();
+	debugRespArray[i] = RespArray[i] ;
     i++;
   }
   inParserComm = DATOSREC;
   llamaParserComm = true; 
+
+  	/*	Serial.print("Envio controlador: ");//DEBUG 
+		s = String(debugRespArray);
+  		Serial.println(s);//DEBUG */
 }
 
 void VerifDatos(void)
@@ -207,13 +214,13 @@ void SendMedCaudal(void)
 		for(int i = 11; i < 15; i++){
 			RespArray[i] = '0';
 		}		
-		  	Serial.println("Entro a flagResetRespArray */*/*");
+//		  	Serial.println("Entro a flagResetRespArray */*/*");
 	}
 
 	if(flagInicializarpreviousMillis){
 		previousMillis = millis();			//Se inicializa previousMillis al inicio de cada ensayo. Durante el ensayo se actualiza en void VerifCaudal(void)
 		flagInicializarpreviousMillis = false;
-		  	Serial.println("Entro a flagInicializarpreviousMillis ");
+//		  	Serial.println("Entro a flagInicializarpreviousMillis ");
 	}	
 }
 

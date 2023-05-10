@@ -104,8 +104,6 @@
                     puntoCalibracion ++;
  
                 }*/
-              Serial.print(" -- Promedio: ");
-              Serial.println(promedio);
 
             //Serial.print(muestraPorPunto + 1);
               Serial.print("º. &--Desde Cero suba la presión hasta ");
@@ -125,8 +123,6 @@
               Serial.println("kPa  y presione #");
               Serial.print("Punto de calibración: ");
               Serial.println(puntoCalibracion + 1);
-              Serial.print(" Promedio: ");
-              Serial.println(promedio);
 
               imprimirLcd2.mensajeLCDcalibracion((muestraPorPunto + 1), valorCalibracion[puntoCalibracion +1]);
               delay(100);
